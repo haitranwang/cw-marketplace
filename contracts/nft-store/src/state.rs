@@ -1,24 +1,35 @@
-use cw_storage_plus::UniqueIndex;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use cosmwasm_std::{Timestamp, Addr, Binary};
+use cosmwasm_std::{Addr, Coin, Timestamp};
 use cw_storage_plus::{Index, IndexList, IndexedMap, Item, MultiIndex};
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct AuctionType {
-    pub name: String, // name, taken from the deployed contract
+    pub name: String,             // name, taken from the deployed contract
     pub contract_address: String, // address of the deployed contract
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct AuctionConfig {
+    pub price: Coin,
+}
+
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug, JsonSchema)]
-pub enum Status { 
+pub enum ListingStatus {
     Ongoing {},
-    Cancelled {
-        cancelled_at: Timestamp
-    },
-    Ended {
-        buyer: Addr
+    Cancelled { cancelled_at: Timestamp },
+    Sold { buyer: Addr },
+}
+
+impl ListingStatus {
+    pub fn name(&self) -> String {
+        match self {
+            ListingStatus::Ongoing {} => "ongoing",
+            ListingStatus::Cancelled { .. } => "cancelled",
+            ListingStatus::Sold { .. } => "ended",
+        }
+        .to_string()
     }
 }
 
@@ -26,19 +37,19 @@ pub type TokenId = String;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct Listing {
-    pub contract_address: Addr, // contract contains the NFT
-    pub token_id: String, // id of the NFT
+    pub contract_address: Addr,            // contract contains the NFT
+    pub token_id: String,                  // id of the NFT
     pub auction_type: Option<AuctionType>, // auction type, currently only support fixed price
-    pub auction_config: Binary, // config of the auction, should be validated by the auction contract when created
-    pub buyer: Option<Addr>, // buyer, will be initialized to None
-    pub status: Status, 
+    pub auction_config: AuctionConfig, // config of the auction, should be validated by the auction contract when created
+    pub buyer: Option<Addr>,           // buyer, will be initialized to None
+    pub status: ListingStatus,
 }
 
 impl Listing {
     pub fn is_active(&self) -> bool {
         match self.status {
-            Status::Ongoing {} => true,
-            _ => false
+            ListingStatus::Ongoing {} => true,
+            _ => false,
         }
     }
 }
@@ -53,8 +64,7 @@ pub fn listing_key(contract_address: &Addr, token_id: &TokenId) -> ListingKey {
 // listings can be indexed by contract_address
 // contract_address can point to multiple listings
 pub struct ListingIndexes<'a> {
-    pub contract_address: MultiIndex<'a, Addr, Listing, ListingKey>,
-    // TODO index by prices
+    pub contract_address: MultiIndex<'a, (String, Addr), Listing, ListingKey>,
 }
 
 impl<'a> IndexList<Listing> for ListingIndexes<'a> {
@@ -69,14 +79,13 @@ impl<'a> IndexList<Listing> for ListingIndexes<'a> {
 pub fn listings<'a>() -> IndexedMap<'a, ListingKey, Listing, ListingIndexes<'a>> {
     let indexes = ListingIndexes {
         contract_address: MultiIndex::new(
-            |l: &Listing| l.contract_address.clone(),
+            |l: &Listing| (l.status.name(), l.contract_address.clone()),
             "listings",
             "listings__contract_address",
         ),
     };
     IndexedMap::new("listings", indexes)
 }
-
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct Config {

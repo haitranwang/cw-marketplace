@@ -1,9 +1,9 @@
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
 use cosmwasm_std::Addr;
 use cosmwasm_std::Binary;
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
 
-use crate::state::Listing;
+use crate::state::{AuctionConfig, Listing};
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct InstantiateMsg {
@@ -18,19 +18,19 @@ pub enum ExecuteMsg {
         contract_address: String,
         token_id: String,
         auction_type_id: u32,
-        auction_config: Binary,
+        auction_config: AuctionConfig,
     },
     // Edit a listing
     EditListing {
         contract_address: String,
         token_id: String,
         auction_type_id: u32,
-        auction_config: Binary,
+        auction_config: AuctionConfig,
     },
     // Buy a listed NFT
     Buy {
-        listing_id: u32,
-        price: u32,
+        contract_address: String,
+        token_id: String,
     },
     // Cancel a listed NFT
     Cancel {
@@ -44,7 +44,7 @@ pub enum ExecuteMsg {
 pub enum QueryMsg {
     // list config of contract
     Config {},
-    // get listing by contract_address 
+    // get listing by contract_address
     ListingsByContractAddress {
         contract_address: String,
         start_after: Option<String>,
