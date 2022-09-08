@@ -1,10 +1,11 @@
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
-    to_binary, Addr, BankMsg, Binary, Coin, Deps, DepsMut, Env, MessageInfo, Order, Response,
-    StdResult, Uint128, WasmMsg,
+    to_binary, Addr, BankMsg, Binary, Coin, Deps, DepsMut, Env, MessageInfo, Order, QueryRequest,
+    Response, StdResult, Uint128, WasmMsg, WasmQuery,
 };
 use cw2::set_contract_version;
+use cw2981_royalties::msg::{Cw2981QueryMsg, RoyaltiesInfoResponse};
 use cw2981_royalties::ExecuteMsg as Cw2981ExecuteMsg;
 use cw_storage_plus::Bound;
 
@@ -182,6 +183,28 @@ pub fn execute_buy(
         return Err(ContractError::InsufficientFunds {});
     }
 
+    // get cw2981 royalties info
+    let royalty_query_msg = Cw2981QueryMsg::RoyaltyInfo {
+        token_id: token_id.clone(),
+        sale_price: listing.auction_config.price.amount,
+    };
+    let royalty_info_rsp: Result<RoyaltiesInfoResponse, cosmwasm_std::StdError> =
+        deps.querier.query(&QueryRequest::Wasm(WasmQuery::Smart {
+            contract_addr: contract_address.to_string(),
+            msg: to_binary(&royalty_query_msg)?,
+        }));
+
+    let (creator, royalty_amount): (Option<Addr>, Option<Uint128>) = match royalty_info_rsp {
+        Ok(RoyaltiesInfoResponse {
+            address,
+            royalty_amount,
+        }) => (
+            Some(deps.api.addr_validate(&address)?),
+            Some(royalty_amount),
+        ),
+        Err(_) => (None, None),
+    };
+
     // message to transfer nft to buyer
     let transfer_nft_msg = WasmMsg::Execute {
         contract_addr: contract_address.to_string(),
@@ -191,17 +214,44 @@ pub fn execute_buy(
         })?,
         funds: vec![],
     };
+    let mut res = Response::new().add_message(transfer_nft_msg);
 
-    // TODO royalties
-    // forward all funds to seller
-    let transfer_token_msg = BankMsg::Send {
-        to_address: config.owner.to_string(),
-        amount: info.funds,
-    };
+    // there is no royalty, creator is the owner, or royalty amount is 0
+    if creator == None
+        || creator.as_ref().unwrap().to_string() == config.owner.to_string()
+        || royalty_amount == None
+        || royalty_amount.unwrap().is_zero()
+    {
+        // transfer all funds to seller
+        let transfer_token_msg = BankMsg::Send {
+            to_address: config.owner.to_string(),
+            amount: info.funds,
+        };
+        res = res.add_message(transfer_token_msg);
+    } else {
+        // transfer royalty to minter
+        let transfer_token_minter_msg = BankMsg::Send {
+            to_address: creator.unwrap().to_string(),
+            amount: vec![Coin {
+                denom: listing.auction_config.price.denom.clone(),
+                amount: royalty_amount.unwrap(),
+            }],
+        };
 
-    let res = Response::new()
-        .add_message(transfer_nft_msg)
-        .add_message(transfer_token_msg)
+        // transfer remaining funds to seller
+        let transfer_token_seller_msg = BankMsg::Send {
+            to_address: config.owner.to_string(),
+            amount: vec![Coin {
+                denom: listing.auction_config.price.denom.clone(),
+                amount: listing.auction_config.price.amount - royalty_amount.unwrap(),
+            }],
+        };
+        res = res
+            .add_message(transfer_token_minter_msg)
+            .add_message(transfer_token_seller_msg);
+    }
+
+    res = res
         .add_attribute("method", "buy")
         .add_attribute("contract_address", contract_address)
         .add_attribute("token_id", token_id)
@@ -364,7 +414,9 @@ fn query_listings_by_contract_address(
 mod tests {
     use super::*;
     use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info, MOCK_CONTRACT_ADDR};
-    use cosmwasm_std::{coins, from_binary, StdError, SubMsg, Timestamp};
+    use cosmwasm_std::{
+        coins, from_binary, ContractResult, CosmosMsg, StdError, SubMsg, Timestamp,
+    };
 
     // we will instantiate a contract with account "creator" but admin is "owner"
     fn instantiate_contract(deps: DepsMut) -> Result<Response, ContractError> {
@@ -751,6 +803,103 @@ mod tests {
         let res = instantiate_contract(deps.as_mut()).unwrap();
         assert_eq!(0, res.messages.len());
 
+        deps.querier.update_wasm(|query| {
+            let cw2981_msg = Cw2981QueryMsg::RoyaltyInfo {
+                token_id: "1".to_string(),
+                sale_price: 100u128.into(),
+            };
+            match query {
+                WasmQuery::Smart { contract_addr, msg } => {
+                    assert_eq!(*contract_addr, MOCK_CONTRACT_ADDR.to_string());
+                    assert_eq!(*msg, to_binary(&cw2981_msg).unwrap());
+                    let royalty_info = RoyaltiesInfoResponse {
+                        address: Addr::unchecked("creator").to_string(),
+                        royalty_amount: 10u128.into(),
+                    };
+                    let result = ContractResult::Ok(to_binary(&royalty_info).unwrap());
+                    cosmwasm_std::SystemResult::Ok(result)
+                }
+                _ => panic!("Unexpected query"),
+            }
+            // mock query royalty info
+        });
+
+        create_listing(
+            deps.as_mut(),
+            &"owner".to_string(),
+            Addr::unchecked(MOCK_CONTRACT_ADDR),
+            &"1".to_string(),
+        )
+        .unwrap();
+
+        // buyer try to buy
+        let msg = ExecuteMsg::Buy {
+            contract_address: MOCK_CONTRACT_ADDR.to_string(),
+            token_id: "1".to_string(),
+        };
+        let mock_info_buyer = mock_info("buyer", &coins(100, "uaura"));
+
+        let response = execute(deps.as_mut(), mock_env(), mock_info_buyer, msg.clone()).unwrap();
+        assert_eq!(3, response.messages.len());
+        println!("Response: {:?}", &response);
+        assert_eq!(
+            response.messages[0],
+            SubMsg::new(CosmosMsg::Wasm(WasmMsg::Execute {
+                contract_addr: MOCK_CONTRACT_ADDR.to_string(),
+                funds: vec![],
+                msg: to_binary(&Cw2981ExecuteMsg::TransferNft {
+                    recipient: "buyer".to_string(),
+                    token_id: "1".to_string(),
+                })
+                .unwrap(),
+            })),
+            "should transfer nft to buyer"
+        );
+        assert_eq!(
+            response.messages[1],
+            SubMsg::new(CosmosMsg::Bank(BankMsg::Send {
+                to_address: "creator".to_string(),
+                amount: vec![cosmwasm_std::coin(10, "uaura")],
+            })),
+            "should transfer royalty to creator"
+        );
+        assert_eq!(
+            response.messages[2],
+            SubMsg::new(CosmosMsg::Bank(BankMsg::Send {
+                to_address: "owner".to_string(),
+                amount: vec![cosmwasm_std::coin(90, "uaura")],
+            })),
+            "should transfer the rest to owner"
+        );
+    }
+
+    #[test]
+    fn can_buy_listing_with_0_royalty() {
+        let mut deps = mock_dependencies();
+        let res = instantiate_contract(deps.as_mut()).unwrap();
+        assert_eq!(0, res.messages.len());
+
+        // mock query royalty info, return 0
+        deps.querier.update_wasm(|query| {
+            let cw2981_msg = Cw2981QueryMsg::RoyaltyInfo {
+                token_id: "1".to_string(),
+                sale_price: 100u128.into(),
+            };
+            match query {
+                WasmQuery::Smart { contract_addr, msg } => {
+                    assert_eq!(*contract_addr, MOCK_CONTRACT_ADDR.to_string());
+                    assert_eq!(*msg, to_binary(&cw2981_msg).unwrap());
+                    let royalty_info = RoyaltiesInfoResponse {
+                        address: Addr::unchecked("creator").to_string(),
+                        royalty_amount: Uint128::zero(),
+                    };
+                    let result = ContractResult::Ok(to_binary(&royalty_info).unwrap());
+                    cosmwasm_std::SystemResult::Ok(result)
+                }
+                _ => panic!("Unexpected query"),
+            }
+        });
+
         create_listing(
             deps.as_mut(),
             &"owner".to_string(),
@@ -771,15 +920,139 @@ mod tests {
         println!("Response: {:?}", &response);
         assert_eq!(
             response.messages[0],
-            SubMsg::new(WasmMsg::Execute {
-                contract_addr: Addr::unchecked(MOCK_CONTRACT_ADDR).to_string(),
+            SubMsg::new(CosmosMsg::Wasm(WasmMsg::Execute {
+                contract_addr: MOCK_CONTRACT_ADDR.to_string(),
                 funds: vec![],
                 msg: to_binary(&Cw2981ExecuteMsg::TransferNft {
                     recipient: "buyer".to_string(),
                     token_id: "1".to_string(),
                 })
                 .unwrap(),
-            })
+            })),
+            "should transfer nft to buyer"
+        );
+        assert_eq!(
+            response.messages[1],
+            SubMsg::new(CosmosMsg::Bank(BankMsg::Send {
+                to_address: "owner".to_string(),
+                amount: vec![cosmwasm_std::coin(100, "uaura")],
+            })),
+            "should transfer all funds to owner"
+        );
+    }
+
+    #[test]
+    fn can_buy_listing_without_royalty() {
+        let mut deps = mock_dependencies();
+        let res = instantiate_contract(deps.as_mut()).unwrap();
+        assert_eq!(0, res.messages.len());
+
+        create_listing(
+            deps.as_mut(),
+            &"owner".to_string(),
+            Addr::unchecked(MOCK_CONTRACT_ADDR),
+            &"1".to_string(),
+        )
+        .unwrap();
+
+        // buyer try to buy
+        let msg = ExecuteMsg::Buy {
+            contract_address: MOCK_CONTRACT_ADDR.to_string(),
+            token_id: "1".to_string(),
+        };
+        let mock_info_buyer = mock_info("buyer", &coins(100, "uaura"));
+
+        let response = execute(deps.as_mut(), mock_env(), mock_info_buyer, msg.clone()).unwrap();
+        assert_eq!(2, response.messages.len());
+        println!("Response: {:?}", &response);
+        assert_eq!(
+            response.messages[0],
+            SubMsg::new(CosmosMsg::Wasm(WasmMsg::Execute {
+                contract_addr: MOCK_CONTRACT_ADDR.to_string(),
+                funds: vec![],
+                msg: to_binary(&Cw2981ExecuteMsg::TransferNft {
+                    recipient: "buyer".to_string(),
+                    token_id: "1".to_string(),
+                })
+                .unwrap(),
+            })),
+            "should transfer nft to buyer"
+        );
+        assert_eq!(
+            response.messages[1],
+            SubMsg::new(CosmosMsg::Bank(BankMsg::Send {
+                to_address: "owner".to_string(),
+                amount: vec![cosmwasm_std::coin(100, "uaura")],
+            })),
+            "should transfer all funds to owner"
+        );
+    }
+
+    #[test]
+    fn can_buy_listing_when_owner_is_creator() {
+        let mut deps = mock_dependencies();
+        let res = instantiate_contract(deps.as_mut()).unwrap();
+        assert_eq!(0, res.messages.len());
+
+        // mock query royalty info, return 0
+        deps.querier.update_wasm(|query| {
+            let cw2981_msg = Cw2981QueryMsg::RoyaltyInfo {
+                token_id: "1".to_string(),
+                sale_price: 100u128.into(),
+            };
+            match query {
+                WasmQuery::Smart { contract_addr, msg } => {
+                    assert_eq!(*contract_addr, MOCK_CONTRACT_ADDR.to_string());
+                    assert_eq!(*msg, to_binary(&cw2981_msg).unwrap());
+                    let royalty_info = RoyaltiesInfoResponse {
+                        address: Addr::unchecked("owner").to_string(),
+                        royalty_amount: 20u128.into(),
+                    };
+                    let result = ContractResult::Ok(to_binary(&royalty_info).unwrap());
+                    cosmwasm_std::SystemResult::Ok(result)
+                }
+                _ => panic!("Unexpected query"),
+            }
+        });
+
+        create_listing(
+            deps.as_mut(),
+            &"owner".to_string(),
+            Addr::unchecked(MOCK_CONTRACT_ADDR),
+            &"1".to_string(),
+        )
+        .unwrap();
+
+        // buyer try to buy
+        let msg = ExecuteMsg::Buy {
+            contract_address: MOCK_CONTRACT_ADDR.to_string(),
+            token_id: "1".to_string(),
+        };
+        let mock_info_buyer = mock_info("buyer", &coins(100, "uaura"));
+
+        let response = execute(deps.as_mut(), mock_env(), mock_info_buyer, msg.clone()).unwrap();
+        assert_eq!(2, response.messages.len());
+        println!("Response: {:?}", &response);
+        assert_eq!(
+            response.messages[0],
+            SubMsg::new(CosmosMsg::Wasm(WasmMsg::Execute {
+                contract_addr: MOCK_CONTRACT_ADDR.to_string(),
+                funds: vec![],
+                msg: to_binary(&Cw2981ExecuteMsg::TransferNft {
+                    recipient: "buyer".to_string(),
+                    token_id: "1".to_string(),
+                })
+                .unwrap(),
+            })),
+            "should transfer nft to buyer"
+        );
+        assert_eq!(
+            response.messages[1],
+            SubMsg::new(CosmosMsg::Bank(BankMsg::Send {
+                to_address: "owner".to_string(),
+                amount: vec![cosmwasm_std::coin(100, "uaura")],
+            })),
+            "should transfer all funds to owner"
         );
     }
 }
