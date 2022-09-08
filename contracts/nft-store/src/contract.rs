@@ -1,8 +1,8 @@
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
-    to_binary, Addr, BankMsg, Binary, Coin, Deps, DepsMut, Env, MessageInfo, Order, ReplyOn,
-    Response, StdError, StdResult, SubMsg, Uint128, WasmMsg,
+    to_binary, Addr, BankMsg, Binary, Coin, Deps, DepsMut, Env, MessageInfo, Order, Response,
+    StdResult, Uint128, WasmMsg,
 };
 use cw2::set_contract_version;
 use cw2981_royalties::ExecuteMsg as Cw2981ExecuteMsg;
@@ -98,7 +98,7 @@ pub fn execute(
 
 pub fn execute_list_nft(
     deps: DepsMut,
-    env: Env,
+    _env: Env,
     info: MessageInfo,
     contract_address: Addr,
     token_id: String,
@@ -144,7 +144,7 @@ pub fn execute_list_nft(
 
 pub fn execute_buy(
     deps: DepsMut,
-    env: Env,
+    _env: Env,
     info: MessageInfo,
     contract_address: Addr,
     token_id: String,
@@ -156,12 +156,6 @@ pub fn execute_buy(
     // check if listing is active
     if !listing.is_active() {
         return Err(ContractError::ListingNotActive {});
-    }
-
-    // check if valid price
-    if info.funds.len() == 0 {
-        // TODO: check price
-        return Err(ContractError::InvalidPrice {});
     }
 
     // get store config
@@ -184,6 +178,9 @@ pub fn execute_buy(
     listings().save(deps.storage, listing_key.clone(), &listing)?;
 
     // check if enough funds
+    if info.funds.len() == 0 || info.funds[0] != listing.auction_config.price {
+        return Err(ContractError::InsufficientFunds {});
+    }
 
     // message to transfer nft to buyer
     let transfer_nft_msg = WasmMsg::Execute {
@@ -264,7 +261,7 @@ pub fn execute_cancel(
 
 pub fn execute_edit_listing(
     deps: DepsMut,
-    env: Env,
+    _env: Env,
     info: MessageInfo,
     contract_address: Addr,
     token_id: String,
@@ -366,11 +363,8 @@ fn query_listings_by_contract_address(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cosmwasm_std::testing::{
-        mock_dependencies, mock_env, mock_info, MockApi, MockQuerier, MockStorage,
-        MOCK_CONTRACT_ADDR,
-    };
-    use cosmwasm_std::{coins, from_binary, Empty, MemoryStorage, OwnedDeps, Timestamp};
+    use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info, MOCK_CONTRACT_ADDR};
+    use cosmwasm_std::{coins, from_binary, StdError, SubMsg, Timestamp};
 
     // we will instantiate a contract with account "creator" but admin is "owner"
     fn instantiate_contract(deps: DepsMut) -> Result<Response, ContractError> {
@@ -722,6 +716,36 @@ mod tests {
     }
 
     #[test]
+    fn cannot_buy_without_enough_funds() {
+        let mut deps = mock_dependencies();
+        let res = instantiate_contract(deps.as_mut()).unwrap();
+        assert_eq!(0, res.messages.len());
+
+        create_listing(
+            deps.as_mut(),
+            &"owner".to_string(),
+            Addr::unchecked(MOCK_CONTRACT_ADDR),
+            &"1".to_string(),
+        )
+        .unwrap();
+
+        // try buy with not enough funds
+        let msg = ExecuteMsg::Buy {
+            contract_address: MOCK_CONTRACT_ADDR.to_string(),
+            token_id: "1".to_string(),
+        };
+        let mock_info_buyer = mock_info("buyer", &coins(99, "uaura"));
+
+        let response = execute(deps.as_mut(), mock_env(), mock_info_buyer, msg.clone());
+        println!("Response: {:?}", &response);
+        match response {
+            Ok(_) => panic!("Expected error"),
+            Err(ContractError::InsufficientFunds {}) => {}
+            Err(e) => panic!("Unexpected error: {}", e),
+        }
+    }
+
+    #[test]
     fn can_buy_listing() {
         let mut deps = mock_dependencies();
         let res = instantiate_contract(deps.as_mut()).unwrap();
@@ -740,7 +764,7 @@ mod tests {
             contract_address: MOCK_CONTRACT_ADDR.to_string(),
             token_id: "1".to_string(),
         };
-        let mock_info_buyer = mock_info("buyer", &coins(100000, "uaura"));
+        let mock_info_buyer = mock_info("buyer", &coins(100, "uaura"));
 
         let response = execute(deps.as_mut(), mock_env(), mock_info_buyer, msg.clone()).unwrap();
         assert_eq!(2, response.messages.len());

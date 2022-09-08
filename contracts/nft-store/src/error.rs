@@ -15,8 +15,8 @@ pub enum ContractError {
     #[error("Listing Not Active")]
     ListingNotActive {},
 
-    #[error("Invalid Price")]
-    InvalidPrice {},
+    #[error("Insufficient Funds")]
+    InsufficientFunds {},
 
     #[error("Custom Error val: {val:?}")]
     CustomError { val: String },
