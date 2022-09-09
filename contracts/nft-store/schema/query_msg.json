@@ -1,15 +1,73 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "QueryMsg",
-  "anyOf": [
+  "oneOf": [
     {
       "type": "object",
       "required": [
-        "get_count"
+        "config"
       ],
       "properties": {
-        "get_count": {
+        "config": {
           "type": "object"
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": [
+        "listings_by_contract_address"
+      ],
+      "properties": {
+        "listings_by_contract_address": {
+          "type": "object",
+          "required": [
+            "contract_address"
+          ],
+          "properties": {
+            "contract_address": {
+              "type": "string"
+            },
+            "limit": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint32",
+              "minimum": 0.0
+            },
+            "start_after": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": [
+        "listing"
+      ],
+      "properties": {
+        "listing": {
+          "type": "object",
+          "required": [
+            "contract_address",
+            "token_id"
+          ],
+          "properties": {
+            "contract_address": {
+              "type": "string"
+            },
+            "token_id": {
+              "type": "string"
+            }
+          }
         }
       },
       "additionalProperties": false

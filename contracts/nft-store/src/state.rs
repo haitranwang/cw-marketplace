@@ -11,8 +11,9 @@ pub struct AuctionType {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-pub struct AuctionConfig {
-    pub price: Coin,
+pub enum AuctionConfig {
+    FixedPrice { price: Coin },
+    Other { config: String }, // a JSON string
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug, JsonSchema)]
@@ -93,4 +94,3 @@ pub struct Config {
 }
 
 pub const CONFIG: Item<Config> = Item::new("config");
-pub const AUCTION_TYPES: Item<AuctionType> = Item::new("auction_types");

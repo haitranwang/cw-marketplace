@@ -112,6 +112,13 @@ pub fn execute_list_nft(
         return Err(ContractError::Unauthorized {});
     }
 
+    // TODO use AuctionType, now auction_type_id must be 0
+    if auction_type_id != 0 {
+        return Err(ContractError::CustomError {
+            val: ("Auction Type not supported".to_string()),
+        });
+    }
+
     // add a nft to listings
     let listing = Listing {
         contract_address: contract_address.clone(),
@@ -145,7 +152,7 @@ pub fn execute_list_nft(
 
 pub fn execute_buy(
     deps: DepsMut,
-    _env: Env,
+    env: Env,
     info: MessageInfo,
     contract_address: Addr,
     token_id: String,
@@ -178,19 +185,38 @@ pub fn execute_buy(
     // save listing
     listings().save(deps.storage, listing_key.clone(), &listing)?;
 
+    match listing.auction_config {
+        AuctionConfig::FixedPrice { ref price } => {
+            process_buy_fixed_price(deps, env, info, &listing, price)
+        }
+        _ => {
+            return Err(ContractError::CustomError {
+                val: ("Invalid Auction Config".to_string()),
+            });
+        }
+    }
+}
+
+fn process_buy_fixed_price(
+    deps: DepsMut,
+    _env: Env,
+    info: MessageInfo,
+    listing: &Listing,
+    price: &Coin,
+) -> Result<Response, ContractError> {
     // check if enough funds
-    if info.funds.len() == 0 || info.funds[0] != listing.auction_config.price {
+    if info.funds.len() == 0 || info.funds[0] != *price {
         return Err(ContractError::InsufficientFunds {});
     }
 
     // get cw2981 royalties info
     let royalty_query_msg = Cw2981QueryMsg::RoyaltyInfo {
-        token_id: token_id.clone(),
-        sale_price: listing.auction_config.price.amount,
+        token_id: listing.token_id.clone(),
+        sale_price: price.amount,
     };
     let royalty_info_rsp: Result<RoyaltiesInfoResponse, cosmwasm_std::StdError> =
         deps.querier.query(&QueryRequest::Wasm(WasmQuery::Smart {
-            contract_addr: contract_address.to_string(),
+            contract_addr: listing.contract_address.to_string(),
             msg: to_binary(&royalty_query_msg)?,
         }));
 
@@ -207,14 +233,17 @@ pub fn execute_buy(
 
     // message to transfer nft to buyer
     let transfer_nft_msg = WasmMsg::Execute {
-        contract_addr: contract_address.to_string(),
+        contract_addr: listing.contract_address.to_string(),
         msg: to_binary(&Cw2981ExecuteMsg::TransferNft {
             recipient: info.sender.to_string(),
-            token_id: token_id.clone(),
+            token_id: listing.token_id.clone(),
         })?,
         funds: vec![],
     };
     let mut res = Response::new().add_message(transfer_nft_msg);
+
+    // get store config
+    let config = CONFIG.load(deps.storage)?;
 
     // there is no royalty, creator is the owner, or royalty amount is 0
     if creator == None
@@ -233,7 +262,7 @@ pub fn execute_buy(
         let transfer_token_minter_msg = BankMsg::Send {
             to_address: creator.unwrap().to_string(),
             amount: vec![Coin {
-                denom: listing.auction_config.price.denom.clone(),
+                denom: price.denom.clone(),
                 amount: royalty_amount.unwrap(),
             }],
         };
@@ -242,8 +271,8 @@ pub fn execute_buy(
         let transfer_token_seller_msg = BankMsg::Send {
             to_address: config.owner.to_string(),
             amount: vec![Coin {
-                denom: listing.auction_config.price.denom.clone(),
-                amount: listing.auction_config.price.amount - royalty_amount.unwrap(),
+                denom: price.denom.clone(),
+                amount: price.amount - royalty_amount.unwrap(),
             }],
         };
         res = res
@@ -253,8 +282,8 @@ pub fn execute_buy(
 
     res = res
         .add_attribute("method", "buy")
-        .add_attribute("contract_address", contract_address)
-        .add_attribute("token_id", token_id)
+        .add_attribute("contract_address", listing.contract_address.to_string())
+        .add_attribute("token_id", listing.token_id.to_string())
         .add_attribute("buyer", info.sender);
 
     Ok(res)
@@ -289,7 +318,7 @@ pub fn execute_cancel(
         contract_address: contract_address.clone(),
         token_id: token_id.clone(),
         auction_type: None,
-        auction_config: AuctionConfig {
+        auction_config: AuctionConfig::FixedPrice {
             price: Coin {
                 denom: "uaura".to_string(),
                 amount: Uint128::from(10u128),
@@ -413,10 +442,77 @@ fn query_listings_by_contract_address(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info, MOCK_CONTRACT_ADDR};
+    use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info, MockApi, MockQuerier};
     use cosmwasm_std::{
-        coins, from_binary, ContractResult, CosmosMsg, StdError, SubMsg, Timestamp,
+        coins, from_binary, ContractResult, CosmosMsg, MemoryStorage, OwnedDeps, StdError, SubMsg,
+        Timestamp,
     };
+
+    const MOCK_CW2981_ADDR: &str = "cw2981_addr";
+
+    fn mock_deps() -> OwnedDeps<MemoryStorage, MockApi, MockQuerier> {
+        let mut deps = mock_dependencies();
+
+        // mock querier
+        deps.querier.update_wasm(|query| {
+            match query {
+                WasmQuery::Smart { contract_addr, msg } => match contract_addr.as_str() {
+                    MOCK_CW2981_ADDR => {
+                        let query_msg: Cw2981QueryMsg = from_binary(msg).unwrap();
+                        println!("query_msg: {:?}", query_msg);
+                        match query_msg {
+                            Cw2981QueryMsg::RoyaltyInfo { token_id, .. } => match token_id.as_str()
+                            {
+                                "1" => {
+                                    let royalty_info = RoyaltiesInfoResponse {
+                                        address: Addr::unchecked("creator").to_string(),
+                                        royalty_amount: 10u128.into(),
+                                    };
+                                    let result =
+                                        ContractResult::Ok(to_binary(&royalty_info).unwrap());
+                                    return cosmwasm_std::SystemResult::Ok(result);
+                                }
+                                "2" => {
+                                    let royalty_info = RoyaltiesInfoResponse {
+                                        address: Addr::unchecked("creator").to_string(),
+                                        royalty_amount: 0u128.into(),
+                                    };
+                                    let result =
+                                        ContractResult::Ok(to_binary(&royalty_info).unwrap());
+                                    return cosmwasm_std::SystemResult::Ok(result);
+                                }
+                                "3" => {
+                                    let royalty_info = RoyaltiesInfoResponse {
+                                        address: Addr::unchecked("owner").to_string(),
+                                        royalty_amount: 10u128.into(),
+                                    };
+                                    let result =
+                                        ContractResult::Ok(to_binary(&royalty_info).unwrap());
+                                    return cosmwasm_std::SystemResult::Ok(result);
+                                }
+                                _ => {
+                                    let result = ContractResult::Err("Not Found".to_string());
+                                    return cosmwasm_std::SystemResult::Ok(result);
+                                }
+                            },
+                            _ => {
+                                let result = ContractResult::Err("Not Found".to_string());
+                                return cosmwasm_std::SystemResult::Ok(result);
+                            }
+                        }
+                    }
+                    _ => {
+                        panic!("Unexpected contract address: {}", contract_addr);
+                    }
+                },
+                _ => panic!("Unexpected query"),
+            }
+            // mock query royalty info
+        });
+        let res = instantiate_contract(deps.as_mut()).unwrap();
+        assert_eq!(0, res.messages.len());
+        deps
+    }
 
     // we will instantiate a contract with account "creator" but admin is "owner"
     fn instantiate_contract(deps: DepsMut) -> Result<Response, ContractError> {
@@ -430,10 +526,7 @@ mod tests {
 
     #[test]
     fn proper_initialization() {
-        let mut deps = mock_dependencies();
-
-        let res = instantiate_contract(deps.as_mut()).unwrap();
-        assert_eq!(0, res.messages.len());
+        let deps = mock_deps();
 
         // it worked, let's query config
         let res = query(deps.as_ref(), mock_env(), QueryMsg::Config {}).unwrap();
@@ -451,8 +544,8 @@ mod tests {
         let msg = ExecuteMsg::ListNft {
             contract_address: contract_address.to_string(),
             token_id: token_id.clone(),
-            auction_type_id: 1,
-            auction_config: AuctionConfig {
+            auction_type_id: 0,
+            auction_config: AuctionConfig::FixedPrice {
                 price: Coin {
                     denom: "uaura".to_string(),
                     amount: Uint128::from(100u128),
@@ -465,16 +558,13 @@ mod tests {
 
     #[test]
     fn owner_can_create_listing() {
-        let mut deps = mock_dependencies();
-
-        let res = instantiate_contract(deps.as_mut()).unwrap();
-        assert_eq!(0, res.messages.len());
+        let mut deps = mock_deps();
 
         for i in 0..20 {
             create_listing(
                 deps.as_mut(),
                 &"owner".to_string(),
-                Addr::unchecked(MOCK_CONTRACT_ADDR),
+                Addr::unchecked(MOCK_CW2981_ADDR),
                 &i.to_string(),
             )
             .unwrap();
@@ -484,7 +574,7 @@ mod tests {
         let query_res = query_listings_by_contract_address(
             deps.as_ref(),
             ListingStatus::Ongoing {}.name(),
-            Addr::unchecked(MOCK_CONTRACT_ADDR),
+            Addr::unchecked(MOCK_CW2981_ADDR),
             Some("10".to_string()),
             Some(10),
         )
@@ -495,7 +585,7 @@ mod tests {
         // can get 1 listing
         let query_listing = query_listing(
             deps.as_ref(),
-            Addr::unchecked(MOCK_CONTRACT_ADDR),
+            Addr::unchecked(MOCK_CW2981_ADDR),
             "5".to_string(),
         )
         .unwrap();
@@ -505,15 +595,12 @@ mod tests {
 
     #[test]
     fn other_cannot_create_listing() {
-        let mut deps = mock_dependencies();
-
-        let res = instantiate_contract(deps.as_mut()).unwrap();
-        assert_eq!(0, res.messages.len());
+        let mut deps = mock_deps();
 
         let response = create_listing(
             deps.as_mut(),
             &"creator".to_string(),
-            Addr::unchecked(MOCK_CONTRACT_ADDR),
+            Addr::unchecked(MOCK_CW2981_ADDR),
             &"1".to_string(),
         );
         println!("Response: {:?}", &response);
@@ -522,16 +609,13 @@ mod tests {
 
     #[test]
     fn owner_cancel_listing() {
-        let mut deps = mock_dependencies();
-
-        let res = instantiate_contract(deps.as_mut()).unwrap();
-        assert_eq!(0, res.messages.len());
+        let mut deps = mock_deps();
 
         for i in 0..20 {
             create_listing(
                 deps.as_mut(),
                 &"owner".to_string(),
-                Addr::unchecked(MOCK_CONTRACT_ADDR),
+                Addr::unchecked(MOCK_CW2981_ADDR),
                 &i.to_string(),
             )
             .unwrap();
@@ -539,7 +623,7 @@ mod tests {
 
         let listing_5 = query_listing(
             deps.as_ref(),
-            Addr::unchecked(MOCK_CONTRACT_ADDR),
+            Addr::unchecked(MOCK_CW2981_ADDR),
             "5".to_string(),
         )
         .unwrap();
@@ -548,7 +632,7 @@ mod tests {
 
         // cancel the listing
         let msg = ExecuteMsg::Cancel {
-            contract_address: MOCK_CONTRACT_ADDR.to_string(),
+            contract_address: MOCK_CW2981_ADDR.to_string(),
             token_id: "5".to_string(),
         };
 
@@ -560,7 +644,7 @@ mod tests {
         // get listing again
         let listing_5 = query_listing(
             deps.as_ref(),
-            Addr::unchecked(MOCK_CONTRACT_ADDR),
+            Addr::unchecked(MOCK_CW2981_ADDR),
             "5".to_string(),
         )
         .unwrap();
@@ -573,22 +657,19 @@ mod tests {
 
     #[test]
     fn other_cannot_cancel_listing() {
-        let mut deps = mock_dependencies();
-
-        let res = instantiate_contract(deps.as_mut()).unwrap();
-        assert_eq!(0, res.messages.len());
+        let mut deps = mock_deps();
 
         create_listing(
             deps.as_mut(),
             &"owner".to_string(),
-            Addr::unchecked(MOCK_CONTRACT_ADDR),
+            Addr::unchecked(MOCK_CW2981_ADDR),
             &"1".to_string(),
         )
         .unwrap();
 
         // anyone try cancel the listing
         let msg = ExecuteMsg::Cancel {
-            contract_address: MOCK_CONTRACT_ADDR.to_string(),
+            contract_address: MOCK_CW2981_ADDR.to_string(),
             token_id: "1".to_string(),
         };
         let mock_info_wrong_sender = mock_info("anyone", &coins(100000, "uaura"));
@@ -608,15 +689,13 @@ mod tests {
 
     #[test]
     fn can_query_by_contract_address() {
-        let mut deps = mock_dependencies();
-        let res = instantiate_contract(deps.as_mut()).unwrap();
-        assert_eq!(0, res.messages.len());
+        let mut deps = mock_deps();
 
         for i in 0..5 {
             create_listing(
                 deps.as_mut(),
                 &"owner".to_string(),
-                Addr::unchecked(MOCK_CONTRACT_ADDR),
+                Addr::unchecked(MOCK_CW2981_ADDR),
                 &format!("{:0>8}", i),
             )
             .unwrap();
@@ -626,7 +705,7 @@ mod tests {
         let query_res = query_listings_by_contract_address(
             deps.as_ref(),
             ListingStatus::Ongoing {}.name(),
-            Addr::unchecked(MOCK_CONTRACT_ADDR),
+            Addr::unchecked(MOCK_CW2981_ADDR),
             Some("".to_string()),
             Some(10),
         )
@@ -638,7 +717,7 @@ mod tests {
 
         // now cancel listing 3
         let msg = ExecuteMsg::Cancel {
-            contract_address: MOCK_CONTRACT_ADDR.to_string(),
+            contract_address: MOCK_CW2981_ADDR.to_string(),
             token_id: "00000003".to_string(),
         };
         let mock_info_correct = mock_info("owner", &coins(100000, "uaura"));
@@ -648,7 +727,7 @@ mod tests {
         let query_res = query_listings_by_contract_address(
             deps.as_ref(),
             ListingStatus::Ongoing {}.name(),
-            Addr::unchecked(MOCK_CONTRACT_ADDR),
+            Addr::unchecked(MOCK_CW2981_ADDR),
             Some("".to_string()),
             Some(10),
         )
@@ -664,7 +743,7 @@ mod tests {
                 cancelled_at: (Timestamp::from_seconds(0)),
             }
             .name(),
-            Addr::unchecked(MOCK_CONTRACT_ADDR),
+            Addr::unchecked(MOCK_CW2981_ADDR),
             Some("".to_string()),
             Some(10),
         )
@@ -676,12 +755,10 @@ mod tests {
 
     #[test]
     fn cannot_buy_non_existent_listing() {
-        let mut deps = mock_dependencies();
-        let res = instantiate_contract(deps.as_mut()).unwrap();
-        assert_eq!(0, res.messages.len());
+        let mut deps = mock_deps();
 
         let msg = ExecuteMsg::Buy {
-            contract_address: MOCK_CONTRACT_ADDR.to_string(),
+            contract_address: MOCK_CW2981_ADDR.to_string(),
             token_id: "1".to_string(),
         };
 
@@ -697,21 +774,19 @@ mod tests {
 
     #[test]
     fn cannot_buy_cancelled_listing() {
-        let mut deps = mock_dependencies();
-        let res = instantiate_contract(deps.as_mut()).unwrap();
-        assert_eq!(0, res.messages.len());
+        let mut deps = mock_deps();
 
         create_listing(
             deps.as_mut(),
             &"owner".to_string(),
-            Addr::unchecked(MOCK_CONTRACT_ADDR),
+            Addr::unchecked(MOCK_CW2981_ADDR),
             &"1".to_string(),
         )
         .unwrap();
 
         // cancel listing
         let msg = ExecuteMsg::Cancel {
-            contract_address: MOCK_CONTRACT_ADDR.to_string(),
+            contract_address: MOCK_CW2981_ADDR.to_string(),
             token_id: "1".to_string(),
         };
         let mock_info_owner = mock_info("owner", &coins(100000, "uaura"));
@@ -719,7 +794,7 @@ mod tests {
 
         // try buy cancelled listing
         let msg = ExecuteMsg::Buy {
-            contract_address: MOCK_CONTRACT_ADDR.to_string(),
+            contract_address: MOCK_CW2981_ADDR.to_string(),
             token_id: "1".to_string(),
         };
 
@@ -735,21 +810,19 @@ mod tests {
 
     #[test]
     fn owner_cannot_buy() {
-        let mut deps = mock_dependencies();
-        let res = instantiate_contract(deps.as_mut()).unwrap();
-        assert_eq!(0, res.messages.len());
+        let mut deps = mock_deps();
 
         create_listing(
             deps.as_mut(),
             &"owner".to_string(),
-            Addr::unchecked(MOCK_CONTRACT_ADDR),
+            Addr::unchecked(MOCK_CW2981_ADDR),
             &"1".to_string(),
         )
         .unwrap();
 
         // owner try to buy
         let msg = ExecuteMsg::Buy {
-            contract_address: MOCK_CONTRACT_ADDR.to_string(),
+            contract_address: MOCK_CW2981_ADDR.to_string(),
             token_id: "1".to_string(),
         };
         let mock_info_wrong_sender = mock_info("owner", &coins(100000, "uaura"));
@@ -769,21 +842,19 @@ mod tests {
 
     #[test]
     fn cannot_buy_without_enough_funds() {
-        let mut deps = mock_dependencies();
-        let res = instantiate_contract(deps.as_mut()).unwrap();
-        assert_eq!(0, res.messages.len());
+        let mut deps = mock_deps();
 
         create_listing(
             deps.as_mut(),
             &"owner".to_string(),
-            Addr::unchecked(MOCK_CONTRACT_ADDR),
+            Addr::unchecked(MOCK_CW2981_ADDR),
             &"1".to_string(),
         )
         .unwrap();
 
         // try buy with not enough funds
         let msg = ExecuteMsg::Buy {
-            contract_address: MOCK_CONTRACT_ADDR.to_string(),
+            contract_address: MOCK_CW2981_ADDR.to_string(),
             token_id: "1".to_string(),
         };
         let mock_info_buyer = mock_info("buyer", &coins(99, "uaura"));
@@ -799,9 +870,7 @@ mod tests {
 
     #[test]
     fn can_buy_listing() {
-        let mut deps = mock_dependencies();
-        let res = instantiate_contract(deps.as_mut()).unwrap();
-        assert_eq!(0, res.messages.len());
+        let mut deps = mock_deps();
 
         deps.querier.update_wasm(|query| {
             let cw2981_msg = Cw2981QueryMsg::RoyaltyInfo {
@@ -810,7 +879,7 @@ mod tests {
             };
             match query {
                 WasmQuery::Smart { contract_addr, msg } => {
-                    assert_eq!(*contract_addr, MOCK_CONTRACT_ADDR.to_string());
+                    assert_eq!(*contract_addr, MOCK_CW2981_ADDR.to_string());
                     assert_eq!(*msg, to_binary(&cw2981_msg).unwrap());
                     let royalty_info = RoyaltiesInfoResponse {
                         address: Addr::unchecked("creator").to_string(),
@@ -827,14 +896,14 @@ mod tests {
         create_listing(
             deps.as_mut(),
             &"owner".to_string(),
-            Addr::unchecked(MOCK_CONTRACT_ADDR),
+            Addr::unchecked(MOCK_CW2981_ADDR),
             &"1".to_string(),
         )
         .unwrap();
 
         // buyer try to buy
         let msg = ExecuteMsg::Buy {
-            contract_address: MOCK_CONTRACT_ADDR.to_string(),
+            contract_address: MOCK_CW2981_ADDR.to_string(),
             token_id: "1".to_string(),
         };
         let mock_info_buyer = mock_info("buyer", &coins(100, "uaura"));
@@ -845,7 +914,7 @@ mod tests {
         assert_eq!(
             response.messages[0],
             SubMsg::new(CosmosMsg::Wasm(WasmMsg::Execute {
-                contract_addr: MOCK_CONTRACT_ADDR.to_string(),
+                contract_addr: MOCK_CW2981_ADDR.to_string(),
                 funds: vec![],
                 msg: to_binary(&Cw2981ExecuteMsg::TransferNft {
                     recipient: "buyer".to_string(),
@@ -875,43 +944,20 @@ mod tests {
 
     #[test]
     fn can_buy_listing_with_0_royalty() {
-        let mut deps = mock_dependencies();
-        let res = instantiate_contract(deps.as_mut()).unwrap();
-        assert_eq!(0, res.messages.len());
-
-        // mock query royalty info, return 0
-        deps.querier.update_wasm(|query| {
-            let cw2981_msg = Cw2981QueryMsg::RoyaltyInfo {
-                token_id: "1".to_string(),
-                sale_price: 100u128.into(),
-            };
-            match query {
-                WasmQuery::Smart { contract_addr, msg } => {
-                    assert_eq!(*contract_addr, MOCK_CONTRACT_ADDR.to_string());
-                    assert_eq!(*msg, to_binary(&cw2981_msg).unwrap());
-                    let royalty_info = RoyaltiesInfoResponse {
-                        address: Addr::unchecked("creator").to_string(),
-                        royalty_amount: Uint128::zero(),
-                    };
-                    let result = ContractResult::Ok(to_binary(&royalty_info).unwrap());
-                    cosmwasm_std::SystemResult::Ok(result)
-                }
-                _ => panic!("Unexpected query"),
-            }
-        });
+        let mut deps = mock_deps();
 
         create_listing(
             deps.as_mut(),
             &"owner".to_string(),
-            Addr::unchecked(MOCK_CONTRACT_ADDR),
-            &"1".to_string(),
+            Addr::unchecked(MOCK_CW2981_ADDR),
+            &"2".to_string(),
         )
         .unwrap();
 
         // buyer try to buy
         let msg = ExecuteMsg::Buy {
-            contract_address: MOCK_CONTRACT_ADDR.to_string(),
-            token_id: "1".to_string(),
+            contract_address: MOCK_CW2981_ADDR.to_string(),
+            token_id: "2".to_string(),
         };
         let mock_info_buyer = mock_info("buyer", &coins(100, "uaura"));
 
@@ -921,11 +967,11 @@ mod tests {
         assert_eq!(
             response.messages[0],
             SubMsg::new(CosmosMsg::Wasm(WasmMsg::Execute {
-                contract_addr: MOCK_CONTRACT_ADDR.to_string(),
+                contract_addr: MOCK_CW2981_ADDR.to_string(),
                 funds: vec![],
                 msg: to_binary(&Cw2981ExecuteMsg::TransferNft {
                     recipient: "buyer".to_string(),
-                    token_id: "1".to_string(),
+                    token_id: "2".to_string(),
                 })
                 .unwrap(),
             })),
@@ -943,22 +989,20 @@ mod tests {
 
     #[test]
     fn can_buy_listing_without_royalty() {
-        let mut deps = mock_dependencies();
-        let res = instantiate_contract(deps.as_mut()).unwrap();
-        assert_eq!(0, res.messages.len());
+        let mut deps = mock_deps();
 
         create_listing(
             deps.as_mut(),
             &"owner".to_string(),
-            Addr::unchecked(MOCK_CONTRACT_ADDR),
-            &"1".to_string(),
+            Addr::unchecked(MOCK_CW2981_ADDR),
+            &"2".to_string(),
         )
         .unwrap();
 
         // buyer try to buy
         let msg = ExecuteMsg::Buy {
-            contract_address: MOCK_CONTRACT_ADDR.to_string(),
-            token_id: "1".to_string(),
+            contract_address: MOCK_CW2981_ADDR.to_string(),
+            token_id: "2".to_string(),
         };
         let mock_info_buyer = mock_info("buyer", &coins(100, "uaura"));
 
@@ -968,11 +1012,11 @@ mod tests {
         assert_eq!(
             response.messages[0],
             SubMsg::new(CosmosMsg::Wasm(WasmMsg::Execute {
-                contract_addr: MOCK_CONTRACT_ADDR.to_string(),
+                contract_addr: MOCK_CW2981_ADDR.to_string(),
                 funds: vec![],
                 msg: to_binary(&Cw2981ExecuteMsg::TransferNft {
                     recipient: "buyer".to_string(),
-                    token_id: "1".to_string(),
+                    token_id: "2".to_string(),
                 })
                 .unwrap(),
             })),
@@ -990,43 +1034,20 @@ mod tests {
 
     #[test]
     fn can_buy_listing_when_owner_is_creator() {
-        let mut deps = mock_dependencies();
-        let res = instantiate_contract(deps.as_mut()).unwrap();
-        assert_eq!(0, res.messages.len());
-
-        // mock query royalty info, return 0
-        deps.querier.update_wasm(|query| {
-            let cw2981_msg = Cw2981QueryMsg::RoyaltyInfo {
-                token_id: "1".to_string(),
-                sale_price: 100u128.into(),
-            };
-            match query {
-                WasmQuery::Smart { contract_addr, msg } => {
-                    assert_eq!(*contract_addr, MOCK_CONTRACT_ADDR.to_string());
-                    assert_eq!(*msg, to_binary(&cw2981_msg).unwrap());
-                    let royalty_info = RoyaltiesInfoResponse {
-                        address: Addr::unchecked("owner").to_string(),
-                        royalty_amount: 20u128.into(),
-                    };
-                    let result = ContractResult::Ok(to_binary(&royalty_info).unwrap());
-                    cosmwasm_std::SystemResult::Ok(result)
-                }
-                _ => panic!("Unexpected query"),
-            }
-        });
+        let mut deps = mock_deps();
 
         create_listing(
             deps.as_mut(),
             &"owner".to_string(),
-            Addr::unchecked(MOCK_CONTRACT_ADDR),
-            &"1".to_string(),
+            Addr::unchecked(MOCK_CW2981_ADDR),
+            &"3".to_string(),
         )
         .unwrap();
 
         // buyer try to buy
         let msg = ExecuteMsg::Buy {
-            contract_address: MOCK_CONTRACT_ADDR.to_string(),
-            token_id: "1".to_string(),
+            contract_address: MOCK_CW2981_ADDR.to_string(),
+            token_id: "3".to_string(),
         };
         let mock_info_buyer = mock_info("buyer", &coins(100, "uaura"));
 
@@ -1036,11 +1057,11 @@ mod tests {
         assert_eq!(
             response.messages[0],
             SubMsg::new(CosmosMsg::Wasm(WasmMsg::Execute {
-                contract_addr: MOCK_CONTRACT_ADDR.to_string(),
+                contract_addr: MOCK_CW2981_ADDR.to_string(),
                 funds: vec![],
                 msg: to_binary(&Cw2981ExecuteMsg::TransferNft {
                     recipient: "buyer".to_string(),
-                    token_id: "1".to_string(),
+                    token_id: "3".to_string(),
                 })
                 .unwrap(),
             })),
