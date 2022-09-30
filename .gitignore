@@ -25,3 +25,6 @@ artifacts/
 
 # code coverage
 tarpaulin-report.*
+
+# node_modules
+node_modules/

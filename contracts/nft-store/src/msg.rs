@@ -2,7 +2,7 @@ use cosmwasm_std::Addr;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use crate::state::{AuctionConfig, Listing};
+use crate::state::{AuctionConfig, AuctionContract, Listing};
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct InstantiateMsg {
@@ -36,6 +36,14 @@ pub enum ExecuteMsg {
         contract_address: String,
         token_id: String,
     },
+    // add a new auction contract
+    AddAuctionContract {
+        auction_contract: AuctionContract,
+    },
+    // remove an auction contract
+    RemoveAuctionContract {
+        contract_address: String,
+    },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -54,9 +62,22 @@ pub enum QueryMsg {
         contract_address: String,
         token_id: String,
     },
+    // get list of auction contracts
+    AuctionContracts {},
+    // validate auction config
+    ValidateAuctionConfig {
+        contract_address: String,
+        code_id: u32,
+        auction_config: AuctionConfig,
+    },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct ListingsResponse {
     pub listings: Vec<Listing>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct ValidateResponse {
+    pub valid: bool,
 }
