@@ -31,7 +31,9 @@ impl StoreContract<'static> {
             return Err(ContractError::Unauthorized {});
         }
 
-        // check that user approves this contract to manage this token
+        // TODO: check that user approves this contract to manage this token
+        // we should also check for expiration
+        // maybe we should require never expired approval
         let query_approval_msg = Cw721QueryMsg::Approval {
             token_id: token_id.clone(),
             spender: env.contract.address.to_string(),
@@ -51,6 +53,8 @@ impl StoreContract<'static> {
         }
 
         // TODO use AuctionType, now auction_type_id must be 0
+        // maybe we don't need this, just use auction config
+        // if contract address is None then it is FixedPrice auction
         if auction_type_id != 0 {
             return Err(ContractError::CustomError {
                 val: ("Auction Type not supported".to_string()),
@@ -62,7 +66,7 @@ impl StoreContract<'static> {
             contract_address: contract_address.clone(),
             token_id: token_id.clone(),
             auction_type: None,
-            auction_config: auction_config,
+            auction_config,
             buyer: None,
             status: ListingStatus::Ongoing {},
         };
@@ -292,51 +296,6 @@ impl StoreContract<'static> {
             .add_attribute("contract_address", contract_address)
             .add_attribute("token_id", token_id)
             .add_attribute("cancelled_at", env.block.time.to_string()))
-    }
-
-    pub fn execute_edit_listing(
-        self: Self,
-        deps: DepsMut,
-        _env: Env,
-        info: MessageInfo,
-        contract_address: Addr,
-        token_id: String,
-        auction_type_id: u32,
-        auction_config: AuctionConfig,
-    ) -> Result<Response, ContractError> {
-        // get the listing
-        let listing_key = listing_key(&contract_address, &token_id);
-        let listing = self.listings.load(deps.storage, listing_key.clone())?;
-
-        // check if listing is active
-        if !listing.is_active() {
-            return Err(ContractError::ListingNotActive {});
-        }
-
-        // get config
-        let config = self.config.load(deps.storage)?;
-
-        // check if listing is owned by sender
-        if config.owner != info.sender {
-            return Err(ContractError::Unauthorized {});
-        }
-
-        // update listing
-        let listing = Listing {
-            contract_address: contract_address.clone(),
-            token_id: token_id.clone(),
-            auction_type: None,
-            auction_config: auction_config,
-            buyer: None,
-            status: ListingStatus::Ongoing {},
-        };
-        self.listings.save(deps.storage, listing_key, &listing)?;
-
-        Ok(Response::new()
-            .add_attribute("method", "edit_listing")
-            .add_attribute("contract_address", contract_address)
-            .add_attribute("token_id", token_id)
-            .add_attribute("auction_type_id", auction_type_id.to_string()))
     }
 
     // function to add a new auction contract

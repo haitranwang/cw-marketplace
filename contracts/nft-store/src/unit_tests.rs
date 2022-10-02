@@ -92,8 +92,8 @@ mod tests {
                                 let result = ContractResult::Ok(
                                     to_binary(&ApprovalResponse {
                                         approval: Approval {
-                                            spender: "aoeu".to_string(),
-                                            expires: Expiration::AtHeight(1234123411),
+                                            spender: "creator".to_string(),
+                                            expires: Expiration::Never {},
                                         },
                                     })
                                     .unwrap(),

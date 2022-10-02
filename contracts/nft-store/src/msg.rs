@@ -19,13 +19,6 @@ pub enum ExecuteMsg {
         auction_type_id: u32,
         auction_config: AuctionConfig,
     },
-    // Edit a listing
-    EditListing {
-        contract_address: String,
-        token_id: String,
-        auction_type_id: u32,
-        auction_config: AuctionConfig,
-    },
     // Buy a listed NFT
     Buy {
         contract_address: String,

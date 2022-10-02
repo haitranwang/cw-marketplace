@@ -72,20 +72,6 @@ pub fn execute(
             api.addr_validate(&contract_address)?,
             token_id,
         ),
-        ExecuteMsg::EditListing {
-            contract_address,
-            token_id,
-            auction_type_id,
-            auction_config,
-        } => store_contract().execute_edit_listing(
-            deps,
-            _env,
-            info,
-            api.addr_validate(&contract_address)?,
-            token_id,
-            auction_type_id,
-            auction_config,
-        ),
         ExecuteMsg::AddAuctionContract { auction_contract } => {
             store_contract().execute_add_auction_contract(deps, _env, info, auction_contract)
         }
