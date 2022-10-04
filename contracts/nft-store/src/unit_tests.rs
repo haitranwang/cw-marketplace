@@ -15,18 +15,11 @@ mod tests {
     use cw2981_royalties::{ExecuteMsg as Cw2981ExecuteMsg, QueryMsg as Cw721QueryMsg};
     use cw721::{Approval, ApprovalResponse};
     use cw_utils::Expiration;
-    use serde::{Deserialize, Serialize};
 
     const MOCK_CW2981_ADDR: &str = "cw2981_addr";
 
     fn mock_deps() -> OwnedDeps<MemoryStorage, MockApi, MockQuerier> {
         let mut deps = mock_dependencies();
-
-        #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-        enum NFTQueryMsg {
-            Cw721QueryMsg,
-            Cw2981QueryMsg,
-        }
 
         // mock querier
         deps.querier.update_wasm(|query| {
