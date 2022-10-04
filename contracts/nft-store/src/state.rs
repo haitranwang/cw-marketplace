@@ -1,24 +1,20 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-
 use cosmwasm_std::{Addr, Coin, Timestamp};
 use cw_storage_plus::{Index, IndexList, IndexedMap, Item, MultiIndex, UniqueIndex};
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-pub struct AuctionType {
-    // we store both the code_id and the contract_address to make sure the contract is the same as the one at creation of the listing.
-    // we will use contract_address to check auction config, while the code_id is used as version of that contract.
-    // we can store only the code_id, but when the contract is updated, the code_id will be changed.
-    //  so we need to store the contract_address to make sure the contract is the same as the one at creation of the listing.
-    pub name: String,
-    pub code_id: u32, // code_id of the deployed auction contract, used as a version identifier
-    pub contract_address: String, // address of the deployed auction contract
-}
+use cw721::Expiration;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub enum AuctionConfig {
-    FixedPrice { price: Coin },
-    Other { config: String }, // a JSON string
+    FixedPrice {
+        price: Coin,
+        start_time: Option<Expiration>, // we use expiration for convinience
+        end_time: Option<Expiration>, // it's required that start_time < end_time
+    },
+    Other {
+        auction: AuctionContract,
+        config: String
+    },
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug, JsonSchema)]
@@ -45,7 +41,6 @@ pub type TokenId = String;
 pub struct Listing {
     pub contract_address: Addr,            // contract contains the NFT
     pub token_id: String,                  // id of the NFT
-    pub auction_type: Option<AuctionType>, // auction type, currently only support fixed price
     pub auction_config: AuctionConfig, // config of the auction, should be validated by the auction contract when created
     pub buyer: Option<Addr>,           // buyer, will be initialized to None
     pub status: ListingStatus,
@@ -104,18 +99,12 @@ pub struct Config {
 // For example, if the new contract is a performance upgrade, it can accept the config
 // If the new contract is a breaking change or a bug fix, it can reject the config
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-pub enum AuctionContractStatus {
-    Enable,
-    Disable { reason: String },
-}
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct AuctionContract {
     pub contract_address: Addr,
     pub code_id: u32,
     pub name: String,
-    pub status: AuctionContractStatus,
 }
 
 pub type AuctionContractKey = Addr;

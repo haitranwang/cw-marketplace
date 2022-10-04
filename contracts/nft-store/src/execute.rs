@@ -7,6 +7,7 @@ use cw2981_royalties::msg::RoyaltiesInfoResponse;
 use cw2981_royalties::ExecuteMsg as Cw2981ExecuteMsg;
 use cw2981_royalties::QueryMsg as Cw2981QueryMsg;
 use cw721::Cw721QueryMsg;
+use cw_utils::Expiration;
 
 use crate::state::AuctionContract;
 use crate::{
@@ -15,6 +16,33 @@ use crate::{
 };
 
 impl StoreContract<'static> {
+    pub fn validate_auction_config(self: &Self, auction_config: &AuctionConfig) -> bool {
+        match auction_config {
+            AuctionConfig::FixedPrice { price, start_time, end_time } => {
+                if price.amount.is_zero() { // since price is Uint128, it cannot be negative, we only
+                                            // need to check if it's zero
+                    return false;
+                }
+                // if start_time or end_time is not set, we don't need to check
+                if start_time.is_some() && end_time.is_some() && start_time.unwrap() >= end_time.unwrap() {
+                    return false;
+                }
+                true
+            },
+            AuctionConfig::Other { auction, config } => {
+                // for now, just return false
+                return false;
+                // parse config as json
+                // let json_config: serde_json::Value = serde_json::from_str(config).unwrap();
+                // check if config has auction contract address
+                // if json_config["auction_contract_address"].is_null() {
+                //     return false;
+                // }
+                // false
+            }
+        }
+    }
+
     pub fn execute_list_nft(
         self: Self,
         deps: DepsMut,
@@ -22,7 +50,6 @@ impl StoreContract<'static> {
         info: MessageInfo,
         contract_address: Addr,
         token_id: String,
-        auction_type_id: u32,
         auction_config: AuctionConfig,
     ) -> Result<Response, ContractError> {
         // check sender is owner
@@ -31,13 +58,12 @@ impl StoreContract<'static> {
             return Err(ContractError::Unauthorized {});
         }
 
-        // TODO: check that user approves this contract to manage this token
-        // we should also check for expiration
-        // maybe we should require never expired approval
+        // check that user approves this contract to manage this token
+        // for now, we require never expired approval
         let query_approval_msg = Cw721QueryMsg::Approval {
             token_id: token_id.clone(),
             spender: env.contract.address.to_string(),
-            include_expired: None,
+            include_expired: Some(true),
         };
         let approval_response: StdResult<cw721::ApprovalResponse> =
             deps.querier.query(&QueryRequest::Wasm(WasmQuery::Smart {
@@ -45,19 +71,25 @@ impl StoreContract<'static> {
                 msg: to_binary(&query_approval_msg)?,
             }));
 
-        // if not approved, return error
-        if approval_response.is_err() {
-            return Err(ContractError::CustomError {
-                val: ("Approval Required".to_string()),
-            });
+
+        // check if approval is never expired
+        match approval_response {
+            Ok(approval) => {
+                match approval.approval.expires {
+                    Expiration::Never {} => {}
+                    _ => return Err(ContractError::Unauthorized {}),
+                }
+            }
+            Err(_) => {
+                return Err(ContractError::CustomError {
+                    val: "Require never expired approval".to_string(),
+                });
+            }
         }
 
-        // TODO use AuctionType, now auction_type_id must be 0
-        // maybe we don't need this, just use auction config
-        // if contract address is None then it is FixedPrice auction
-        if auction_type_id != 0 {
+        if self.validate_auction_config(&auction_config) == false {
             return Err(ContractError::CustomError {
-                val: ("Auction Type not supported".to_string()),
+                val: "Invalid auction config".to_string(),
             });
         }
 
@@ -65,7 +97,6 @@ impl StoreContract<'static> {
         let listing = Listing {
             contract_address: contract_address.clone(),
             token_id: token_id.clone(),
-            auction_type: None,
             auction_config,
             buyer: None,
             status: ListingStatus::Ongoing {},
@@ -94,7 +125,6 @@ impl StoreContract<'static> {
                 .add_attribute("method", "list_nft")
                 .add_attribute("contract_address", contract_address)
                 .add_attribute("token_id", token_id)
-                .add_attribute("auction_type_id", auction_type_id.to_string())
                 .add_attribute("auction_config", auction_config_str)),
             Err(_) => Err(ContractError::CustomError {
                 val: ("Auction Config Error".to_string()),
@@ -139,8 +169,12 @@ impl StoreContract<'static> {
         self.listings
             .save(deps.storage, listing_key.clone(), &listing)?;
 
-        match listing.auction_config {
-            AuctionConfig::FixedPrice { ref price } => {
+        match &listing.auction_config {
+            AuctionConfig::FixedPrice {
+                price,
+                start_time,
+                end_time
+            } => {
                 self.process_buy_fixed_price(deps, env, info, &listing, price)
             }
             _ => {
@@ -277,13 +311,7 @@ impl StoreContract<'static> {
         let listing = Listing {
             contract_address: contract_address.clone(),
             token_id: token_id.clone(),
-            auction_type: None,
-            auction_config: AuctionConfig::FixedPrice {
-                price: Coin {
-                    denom: "uaura".to_string(),
-                    amount: Uint128::from(10u128),
-                },
-            },
+            auction_config: listing.auction_config,
             buyer: None,
             status: ListingStatus::Cancelled {
                 cancelled_at: env.block.time,

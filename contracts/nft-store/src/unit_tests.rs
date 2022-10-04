@@ -149,12 +149,13 @@ mod tests {
         let msg = ExecuteMsg::ListNft {
             contract_address: contract_address.to_string(),
             token_id: token_id.clone(),
-            auction_type_id: 0,
             auction_config: AuctionConfig::FixedPrice {
                 price: Coin {
                     denom: "uaura".to_string(),
                     amount: Uint128::from(100u128),
                 },
+                start_time: None,
+                end_time: None
             },
         };
         let info = mock_info(sender, &coins(1000, "uaura"));

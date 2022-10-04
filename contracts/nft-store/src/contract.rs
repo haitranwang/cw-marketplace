@@ -41,7 +41,6 @@ pub fn execute(
         ExecuteMsg::ListNft {
             contract_address,
             token_id,
-            auction_type_id,
             auction_config,
         } => store_contract().execute_list_nft(
             deps,
@@ -49,7 +48,6 @@ pub fn execute(
             info,
             api.addr_validate(&contract_address)?,
             token_id,
-            auction_type_id,
             auction_config,
         ),
         ExecuteMsg::Buy {
