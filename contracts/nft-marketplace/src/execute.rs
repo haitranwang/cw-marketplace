@@ -37,7 +37,10 @@ impl MarketplaceContract<'static> {
                 }
                 true
             }
-            AuctionConfig::Other { auction: _, config: _ } => {
+            AuctionConfig::Other {
+                auction: _,
+                config: _,
+            } => {
                 // for now, just return false
                 false
                 // parse config as json
@@ -306,11 +309,9 @@ impl MarketplaceContract<'static> {
 
                 Ok(res)
             }
-            _ => {
-                Err(ContractError::CustomError {
-                    val: ("Invalid Auction Config".to_string()),
-                })
-            }
+            _ => Err(ContractError::CustomError {
+                val: ("Invalid Auction Config".to_string()),
+            }),
         }
     }
 

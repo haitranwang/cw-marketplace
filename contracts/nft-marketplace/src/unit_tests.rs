@@ -331,12 +331,7 @@ mod tests {
         };
         let mock_info_wrong_sender = mock_info("anyone", &coins(100, "uaura"));
 
-        let response = execute(
-            deps.as_mut(),
-            mock_env(),
-            mock_info_wrong_sender,
-            msg,
-        );
+        let response = execute(deps.as_mut(), mock_env(), mock_info_wrong_sender, msg);
         match response {
             Ok(_) => panic!("Expected error"),
             Err(ContractError::Unauthorized {}) => {}
@@ -516,12 +511,7 @@ mod tests {
         };
         let mock_info_wrong_sender = mock_info("owner", &coins(100, "uaura"));
 
-        let response = execute(
-            deps.as_mut(),
-            mock_env(),
-            mock_info_wrong_sender,
-            msg,
-        );
+        let response = execute(deps.as_mut(), mock_env(), mock_info_wrong_sender, msg);
         match response {
             Ok(_) => panic!("Expected error"),
             Err(ContractError::CustomError { .. }) => {}

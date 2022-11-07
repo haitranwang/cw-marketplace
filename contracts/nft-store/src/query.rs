@@ -26,9 +26,8 @@ impl StoreContract<'static> {
         limit: Option<u32>,
     ) -> StdResult<ListingsResponse> {
         let limit = limit.unwrap_or(30).min(30) as usize;
-        let start: Option<Bound<ListingKey>> = start_after.map(
-            |token_id| Bound::exclusive(listing_key(&contract_address, &token_id))
-        );
+        let start: Option<Bound<ListingKey>> =
+            start_after.map(|token_id| Bound::exclusive(listing_key(&contract_address, &token_id)));
         let listings = self
             .listings
             .idx

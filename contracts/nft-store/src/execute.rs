@@ -37,7 +37,7 @@ impl StoreContract<'static> {
                 }
                 true
             }
-            AuctionConfig::Other {..} => {
+            AuctionConfig::Other { .. } => {
                 // for now, just return false
                 false
                 // parse config as json
@@ -160,10 +160,9 @@ impl StoreContract<'static> {
         self.listings.remove(deps.storage, listing_key)?;
 
         match &listing.auction_config {
-            AuctionConfig::FixedPrice {
-                price,
-                ..
-            } => self.process_buy_fixed_price(deps, env, info, &listing, price),
+            AuctionConfig::FixedPrice { price, .. } => {
+                self.process_buy_fixed_price(deps, env, info, &listing, price)
+            }
             _ => {
                 // TODO where should we store auction_contract? in auction_config or as in a list
                 // get auction contract and validate bid
