@@ -152,15 +152,15 @@ mod tests {
 
     fn create_listing(
         deps: DepsMut,
-        sender: &String,
+        sender: &str,
         contract_address: Addr,
-        token_id: &String,
+        token_id: &str,
         start_time: Option<Expiration>,
         end_time: Option<Expiration>,
     ) -> Result<Response, ContractError> {
         let msg = ExecuteMsg::ListNft {
             contract_address: contract_address.to_string(),
-            token_id: token_id.clone(),
+            token_id: token_id.to_string(),
             auction_config: AuctionConfig::FixedPrice {
                 price: Coin {
                     denom: "uaura".to_string(),
@@ -180,9 +180,9 @@ mod tests {
 
         let response = create_listing(
             deps.as_mut(),
-            &"owner".to_string(),
+            "owner",
             Addr::unchecked(MOCK_CW2981_ADDR),
-            &"1".to_string(),
+            "1",
             None,
             None,
         );
@@ -196,9 +196,9 @@ mod tests {
 
         let response = create_listing(
             deps.as_mut(),
-            &"owner".to_string(),
+            "owner",
             Addr::unchecked(MOCK_CW2981_ADDR),
-            &"1".to_string(),
+            "1",
             None,
             None,
         );
@@ -229,9 +229,9 @@ mod tests {
 
         let response = create_listing(
             deps.as_mut(),
-            &"owner".to_string(),
+            "owner",
             Addr::unchecked(MOCK_CW2981_ADDR),
-            &"1".to_string(),
+            "1",
             None,
             None,
         );
@@ -242,9 +242,9 @@ mod tests {
         // another user tries to update the listing
         let err_response = create_listing(
             deps.as_mut(),
-            &"another_user".to_string(),
+            "another_user",
             Addr::unchecked(MOCK_CW2981_ADDR),
-            &"1".to_string(),
+            "1",
             None,
             None,
         );
@@ -255,9 +255,9 @@ mod tests {
         // owner tries to update the listing
         let update_response = create_listing(
             deps.as_mut(),
-            &"owner".to_string(),
+            "owner",
             Addr::unchecked(MOCK_CW2981_ADDR),
-            &"1".to_string(),
+            "1",
             None,
             None,
         );
@@ -272,9 +272,9 @@ mod tests {
 
         create_listing(
             deps.as_mut(),
-            &"owner".to_string(),
+            "owner",
             Addr::unchecked(MOCK_CW2981_ADDR),
-            &"1".to_string(),
+            "1",
             None,
             None,
         )
@@ -316,9 +316,9 @@ mod tests {
 
         create_listing(
             deps.as_mut(),
-            &"owner".to_string(),
+            "owner",
             Addr::unchecked(MOCK_CW2981_ADDR),
-            &"1".to_string(),
+            "1",
             None,
             None,
         )
@@ -345,9 +345,9 @@ mod tests {
 
         create_listing(
             deps.as_mut(),
-            &"owner".to_string(),
+            "owner",
             Addr::unchecked(MOCK_CW2981_ADDR),
-            &"1".to_string(),
+            "1",
             None,
             Some(Expiration::AtHeight(100)),
         )
@@ -391,7 +391,7 @@ mod tests {
         for i in 0..5 {
             create_listing(
                 deps.as_mut(),
-                &"owner".to_string(),
+                "owner",
                 Addr::unchecked(MOCK_CW2981_ADDR),
                 &format!("{:0>8}", i),
                 None,
@@ -462,9 +462,9 @@ mod tests {
 
         create_listing(
             deps.as_mut(),
-            &"owner".to_string(),
+            "owner",
             Addr::unchecked(MOCK_CW2981_ADDR),
-            &"1".to_string(),
+            "1",
             None,
             None,
         )
@@ -496,9 +496,9 @@ mod tests {
 
         create_listing(
             deps.as_mut(),
-            &"owner".to_string(),
+            "owner",
             Addr::unchecked(MOCK_CW2981_ADDR),
-            &"1".to_string(),
+            "1",
             None,
             None,
         )
@@ -525,9 +525,9 @@ mod tests {
 
         create_listing(
             deps.as_mut(),
-            &"owner".to_string(),
+            "owner",
             Addr::unchecked(MOCK_CW2981_ADDR),
-            &"1".to_string(),
+            "1",
             None,
             None,
         )
@@ -555,9 +555,9 @@ mod tests {
 
         create_listing(
             deps.as_mut(),
-            &"owner".to_string(),
+            "owner",
             Addr::unchecked(MOCK_CW2981_ADDR),
-            &"1".to_string(),
+            "1",
             None,
             None,
         )
@@ -610,9 +610,9 @@ mod tests {
 
         create_listing(
             deps.as_mut(),
-            &"owner".to_string(),
+            "owner",
             Addr::unchecked(MOCK_CW2981_ADDR),
-            &"1".to_string(),
+            "1",
             Some(Expiration::AtTime(Timestamp::from_nanos(1_600_000_001))),
             None,
         )
@@ -642,9 +642,9 @@ mod tests {
 
         create_listing(
             deps.as_mut(),
-            &"owner".to_string(),
+            "owner",
             Addr::unchecked(MOCK_CW2981_ADDR),
-            &"1".to_string(),
+            "1",
             None,
             Some(Expiration::AtTime(Timestamp::from_nanos(1_600_000_000))),
         )
@@ -674,9 +674,9 @@ mod tests {
 
         create_listing(
             deps.as_mut(),
-            &"owner".to_string(),
+            "owner",
             Addr::unchecked(MOCK_CW2981_ADDR),
-            &"2".to_string(),
+            "2",
             None,
             None,
         )
@@ -721,9 +721,9 @@ mod tests {
 
         create_listing(
             deps.as_mut(),
-            &"owner".to_string(),
+            "owner",
             Addr::unchecked(MOCK_CW2981_ADDR),
-            &"2".to_string(),
+            "2",
             None,
             None,
         )
@@ -768,9 +768,9 @@ mod tests {
 
         create_listing(
             deps.as_mut(),
-            &"owner".to_string(),
+            "owner",
             Addr::unchecked(MOCK_CW2981_ADDR),
-            &"3".to_string(),
+            "3",
             None,
             None,
         )

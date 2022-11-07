@@ -42,7 +42,7 @@ mod tests {
                                                 let result = ContractResult::Ok(
                                                     to_binary(&royalty_info).unwrap(),
                                                 );
-                                                return cosmwasm_std::SystemResult::Ok(result);
+                                                cosmwasm_std::SystemResult::Ok(result)
                                             }
                                             "2" => {
                                                 let royalty_info = RoyaltiesInfoResponse {
@@ -52,7 +52,7 @@ mod tests {
                                                 let result = ContractResult::Ok(
                                                     to_binary(&royalty_info).unwrap(),
                                                 );
-                                                return cosmwasm_std::SystemResult::Ok(result);
+                                                cosmwasm_std::SystemResult::Ok(result)
                                             }
                                             "3" => {
                                                 let royalty_info = RoyaltiesInfoResponse {
@@ -62,25 +62,25 @@ mod tests {
                                                 let result = ContractResult::Ok(
                                                     to_binary(&royalty_info).unwrap(),
                                                 );
-                                                return cosmwasm_std::SystemResult::Ok(result);
+                                                cosmwasm_std::SystemResult::Ok(result)
                                             }
                                             _ => {
                                                 let result =
                                                     ContractResult::Err("Not Found".to_string());
-                                                return cosmwasm_std::SystemResult::Ok(result);
+                                                cosmwasm_std::SystemResult::Ok(result)
                                             }
                                         }
                                     }
                                     Cw2981QueryMsg::CheckRoyalties {} => {
                                         let result = ContractResult::Ok(to_binary(&true).unwrap());
-                                        return cosmwasm_std::SystemResult::Ok(result);
+                                        cosmwasm_std::SystemResult::Ok(result)
                                     }
                                 }
                             }
                             Cw721QueryMsg::Approval {
-                                token_id,
-                                spender,
-                                include_expired,
+                                token_id: _,
+                                spender: _,
+                                include_expired: _,
                             } => {
                                 let result = ContractResult::Ok(
                                     to_binary(&ApprovalResponse {
@@ -91,11 +91,11 @@ mod tests {
                                     })
                                     .unwrap(),
                                 );
-                                return cosmwasm_std::SystemResult::Ok(result);
+                                cosmwasm_std::SystemResult::Ok(result)
                             }
                             _ => {
                                 let result = ContractResult::Err("Not Found".to_string());
-                                return cosmwasm_std::SystemResult::Ok(result);
+                                cosmwasm_std::SystemResult::Ok(result)
                             }
                         }
                     }
@@ -135,13 +135,13 @@ mod tests {
 
     fn create_listing(
         deps: DepsMut,
-        sender: &String,
+        sender: &str,
         contract_address: Addr,
-        token_id: &String,
+        token_id: &str,
     ) -> Result<Response, ContractError> {
         let msg = ExecuteMsg::ListNft {
             contract_address: contract_address.to_string(),
-            token_id: token_id.clone(),
+            token_id: token_id.to_string(),
             auction_config: AuctionConfig::FixedPrice {
                 price: Coin {
                     denom: "uaura".to_string(),
@@ -162,7 +162,7 @@ mod tests {
         for i in 0..20 {
             create_listing(
                 deps.as_mut(),
-                &"owner".to_string(),
+                "owner",
                 Addr::unchecked(MOCK_CW2981_ADDR),
                 &i.to_string(),
             )
@@ -200,9 +200,9 @@ mod tests {
 
         let response = create_listing(
             deps.as_mut(),
-            &"creator".to_string(),
+            "creator",
             Addr::unchecked(MOCK_CW2981_ADDR),
-            &"1".to_string(),
+            "1",
         );
         println!("Response: {:?}", &response);
         assert!(response.is_err());
@@ -215,7 +215,7 @@ mod tests {
         for i in 0..20 {
             create_listing(
                 deps.as_mut(),
-                &"owner".to_string(),
+                "owner",
                 Addr::unchecked(MOCK_CW2981_ADDR),
                 &i.to_string(),
             )
@@ -252,9 +252,9 @@ mod tests {
             )
             .unwrap();
         println!("Listing 5: {:?}", &listing_5.status.name());
-        assert_eq!(
+        assert!(
             matches!(listing_5.status, ListingStatus::Cancelled { .. }),
-            true
+            "Listing should be cancelled"
         );
     }
 
@@ -264,9 +264,9 @@ mod tests {
 
         create_listing(
             deps.as_mut(),
-            &"owner".to_string(),
+            "owner",
             Addr::unchecked(MOCK_CW2981_ADDR),
-            &"1".to_string(),
+            "1",
         )
         .unwrap();
 
@@ -277,12 +277,7 @@ mod tests {
         };
         let mock_info_wrong_sender = mock_info("anyone", &coins(100000, "uaura"));
 
-        let response = execute(
-            deps.as_mut(),
-            mock_env(),
-            mock_info_wrong_sender,
-            msg.clone(),
-        );
+        let response = execute(deps.as_mut(), mock_env(), mock_info_wrong_sender, msg);
         match response {
             Ok(_) => panic!("Expected error"),
             Err(ContractError::Unauthorized {}) => {}
@@ -297,7 +292,7 @@ mod tests {
         for i in 0..5 {
             create_listing(
                 deps.as_mut(),
-                &"owner".to_string(),
+                "owner",
                 Addr::unchecked(MOCK_CW2981_ADDR),
                 &format!("{:0>8}", i),
             )
@@ -383,9 +378,9 @@ mod tests {
 
         create_listing(
             deps.as_mut(),
-            &"owner".to_string(),
+            "owner",
             Addr::unchecked(MOCK_CW2981_ADDR),
-            &"1".to_string(),
+            "1",
         )
         .unwrap();
 
@@ -419,9 +414,9 @@ mod tests {
 
         create_listing(
             deps.as_mut(),
-            &"owner".to_string(),
+            "owner",
             Addr::unchecked(MOCK_CW2981_ADDR),
-            &"1".to_string(),
+            "1",
         )
         .unwrap();
 
@@ -432,12 +427,7 @@ mod tests {
         };
         let mock_info_wrong_sender = mock_info("owner", &coins(100000, "uaura"));
 
-        let response = execute(
-            deps.as_mut(),
-            mock_env(),
-            mock_info_wrong_sender,
-            msg.clone(),
-        );
+        let response = execute(deps.as_mut(), mock_env(), mock_info_wrong_sender, msg);
         match response {
             Ok(_) => panic!("Expected error"),
             Err(ContractError::CustomError { .. }) => {}
@@ -451,9 +441,9 @@ mod tests {
 
         create_listing(
             deps.as_mut(),
-            &"owner".to_string(),
+            "owner",
             Addr::unchecked(MOCK_CW2981_ADDR),
-            &"1".to_string(),
+            "1",
         )
         .unwrap();
 
@@ -464,7 +454,7 @@ mod tests {
         };
         let mock_info_buyer = mock_info("buyer", &coins(99, "uaura"));
 
-        let response = execute(deps.as_mut(), mock_env(), mock_info_buyer, msg.clone());
+        let response = execute(deps.as_mut(), mock_env(), mock_info_buyer, msg);
         println!("Response: {:?}", &response);
         match response {
             Ok(_) => panic!("Expected error"),
@@ -479,9 +469,9 @@ mod tests {
 
         create_listing(
             deps.as_mut(),
-            &"owner".to_string(),
+            "owner",
             Addr::unchecked(MOCK_CW2981_ADDR),
-            &"1".to_string(),
+            "1",
         )
         .unwrap();
 
@@ -492,7 +482,7 @@ mod tests {
         };
         let mock_info_buyer = mock_info("buyer", &coins(100, "uaura"));
 
-        let response = execute(deps.as_mut(), mock_env(), mock_info_buyer, msg.clone()).unwrap();
+        let response = execute(deps.as_mut(), mock_env(), mock_info_buyer, msg).unwrap();
         assert_eq!(3, response.messages.len());
         println!("Response: {:?}", &response);
         assert_eq!(
@@ -532,9 +522,9 @@ mod tests {
 
         create_listing(
             deps.as_mut(),
-            &"owner".to_string(),
+            "owner",
             Addr::unchecked(MOCK_CW2981_ADDR),
-            &"2".to_string(),
+            "2",
         )
         .unwrap();
 
@@ -545,7 +535,7 @@ mod tests {
         };
         let mock_info_buyer = mock_info("buyer", &coins(100, "uaura"));
 
-        let response = execute(deps.as_mut(), mock_env(), mock_info_buyer, msg.clone()).unwrap();
+        let response = execute(deps.as_mut(), mock_env(), mock_info_buyer, msg).unwrap();
         assert_eq!(2, response.messages.len());
         println!("Response: {:?}", &response);
         assert_eq!(
@@ -577,9 +567,9 @@ mod tests {
 
         create_listing(
             deps.as_mut(),
-            &"owner".to_string(),
+            "owner",
             Addr::unchecked(MOCK_CW2981_ADDR),
-            &"2".to_string(),
+            "2",
         )
         .unwrap();
 
@@ -590,7 +580,7 @@ mod tests {
         };
         let mock_info_buyer = mock_info("buyer", &coins(100, "uaura"));
 
-        let response = execute(deps.as_mut(), mock_env(), mock_info_buyer, msg.clone()).unwrap();
+        let response = execute(deps.as_mut(), mock_env(), mock_info_buyer, msg).unwrap();
         assert_eq!(2, response.messages.len());
         println!("Response: {:?}", &response);
         assert_eq!(
@@ -622,9 +612,9 @@ mod tests {
 
         create_listing(
             deps.as_mut(),
-            &"owner".to_string(),
+            "owner",
             Addr::unchecked(MOCK_CW2981_ADDR),
-            &"3".to_string(),
+            "3",
         )
         .unwrap();
 
@@ -635,7 +625,7 @@ mod tests {
         };
         let mock_info_buyer = mock_info("buyer", &coins(100, "uaura"));
 
-        let response = execute(deps.as_mut(), mock_env(), mock_info_buyer, msg.clone()).unwrap();
+        let response = execute(deps.as_mut(), mock_env(), mock_info_buyer, msg).unwrap();
         assert_eq!(2, response.messages.len());
         println!("Response: {:?}", &response);
         assert_eq!(

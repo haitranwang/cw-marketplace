@@ -47,10 +47,7 @@ pub struct Listing {
 
 impl Listing {
     pub fn is_active(&self) -> bool {
-        match self.status {
-            ListingStatus::Ongoing {} => true,
-            _ => false,
-        }
+        matches!(self.status, ListingStatus::Ongoing {})
     }
 
     // expired is when a listing status is still ongoing but has passed the end_time
