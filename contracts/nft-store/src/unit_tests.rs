@@ -148,7 +148,7 @@ mod tests {
                     amount: Uint128::from(100u128),
                 },
                 start_time: None,
-                end_time: None
+                end_time: None,
             },
         };
         let info = mock_info(sender, &coins(1000, "uaura"));

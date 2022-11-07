@@ -18,17 +18,25 @@ use crate::{
 impl StoreContract<'static> {
     pub fn validate_auction_config(self: &Self, auction_config: &AuctionConfig) -> bool {
         match auction_config {
-            AuctionConfig::FixedPrice { price, start_time, end_time } => {
-                if price.amount.is_zero() { // since price is Uint128, it cannot be negative, we only
-                                            // need to check if it's zero
+            AuctionConfig::FixedPrice {
+                price,
+                start_time,
+                end_time,
+            } => {
+                if price.amount.is_zero() {
+                    // since price is Uint128, it cannot be negative, we only
+                    // need to check if it's zero
                     return false;
                 }
                 // if start_time or end_time is not set, we don't need to check
-                if start_time.is_some() && end_time.is_some() && start_time.unwrap() >= end_time.unwrap() {
+                if start_time.is_some()
+                    && end_time.is_some()
+                    && start_time.unwrap() >= end_time.unwrap()
+                {
                     return false;
                 }
                 true
-            },
+            }
             AuctionConfig::Other { auction, config } => {
                 // for now, just return false
                 return false;
@@ -71,15 +79,12 @@ impl StoreContract<'static> {
                 msg: to_binary(&query_approval_msg)?,
             }));
 
-
         // check if approval is never expired
         match approval_response {
-            Ok(approval) => {
-                match approval.approval.expires {
-                    Expiration::Never {} => {}
-                    _ => return Err(ContractError::Unauthorized {}),
-                }
-            }
+            Ok(approval) => match approval.approval.expires {
+                Expiration::Never {} => {}
+                _ => return Err(ContractError::Unauthorized {}),
+            },
             Err(_) => {
                 return Err(ContractError::CustomError {
                     val: "Require never expired approval".to_string(),
@@ -103,20 +108,12 @@ impl StoreContract<'static> {
         };
         let listing_key = listing_key(&contract_address, &token_id);
 
-        // TODO what to do if listing already exists, currently just update it with new values
-        //   this will make tracking difficult
-        let _listing = self
-            .listings
-            .update(deps.storage, listing_key, |old| match old {
-                Some(old_listing) => {
-                    if old_listing.is_active() {
-                        Err(ContractError::AlreadyExists {})
-                    } else {
-                        Ok(listing)
-                    }
-                }
-                None => Ok(listing),
-            })?;
+        // we update listing if it already exists, so that we can update auction config
+        let _listing = self.listings.update(
+            deps.storage,
+            listing_key,
+            |_old| -> Result<Listing, ContractError> { Ok(listing) },
+        )?;
 
         // println!("Listing: {:?}", _listing);
         let auction_config_str = serde_json::to_string(&_listing.auction_config);
@@ -159,24 +156,15 @@ impl StoreContract<'static> {
             });
         }
 
-        // update listing
-        listing.buyer = Some(info.sender.clone());
-        listing.status = ListingStatus::Sold {
-            buyer: info.sender.clone(),
-        };
-
-        // save listing
-        self.listings
-            .save(deps.storage, listing_key.clone(), &listing)?;
+        // remove the listing
+        self.listings.remove(deps.storage, listing_key.clone())?;
 
         match &listing.auction_config {
             AuctionConfig::FixedPrice {
                 price,
                 start_time,
-                end_time
-            } => {
-                self.process_buy_fixed_price(deps, env, info, &listing, price)
-            }
+                end_time,
+            } => self.process_buy_fixed_price(deps, env, info, &listing, price),
             _ => {
                 // TODO where should we store auction_contract? in auction_config or as in a list
                 // get auction contract and validate bid
