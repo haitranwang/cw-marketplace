@@ -18,17 +18,25 @@ use crate::{
 impl MarketplaceContract<'static> {
     pub fn validate_auction_config(self: &Self, auction_config: &AuctionConfig) -> bool {
         match auction_config {
-            AuctionConfig::FixedPrice { price, start_time, end_time } => {
-                if price.amount.is_zero() { // since price is Uint128, it cannot be negative, we only
-                                            // need to check if it's zero
+            AuctionConfig::FixedPrice {
+                price,
+                start_time,
+                end_time,
+            } => {
+                if price.amount.is_zero() {
+                    // since price is Uint128, it cannot be negative, we only
+                    // need to check if it's zero
                     return false;
                 }
                 // if start_time or end_time is not set, we don't need to check
-                if start_time.is_some() && end_time.is_some() && start_time.unwrap() >= end_time.unwrap() {
+                if start_time.is_some()
+                    && end_time.is_some()
+                    && start_time.unwrap() >= end_time.unwrap()
+                {
                     return false;
                 }
                 true
-            },
+            }
             AuctionConfig::Other { auction, config } => {
                 // for now, just return false
                 return false;
@@ -52,6 +60,27 @@ impl MarketplaceContract<'static> {
         token_id: String,
         auction_config: AuctionConfig,
     ) -> Result<Response, ContractError> {
+        // check if user is the owner of the token
+        let query_owner_msg = Cw721QueryMsg::OwnerOf {
+            token_id: token_id.clone(),
+            include_expired: Some(false),
+        };
+        let owner_response: StdResult<cw721::OwnerOfResponse> =
+            deps.querier.query(&QueryRequest::Wasm(WasmQuery::Smart {
+                contract_addr: contract_address.to_string(),
+                msg: to_binary(&query_owner_msg)?,
+            }));
+        match owner_response {
+            Ok(owner) => {
+                if owner.owner != info.sender.to_string() {
+                    return Err(ContractError::Unauthorized {});
+                }
+            }
+            Err(_) => {
+                return Err(ContractError::Unauthorized {});
+            }
+        }
+
         // check that user approves this contract to manage this token
         // for now, we require never expired approval
         let query_approval_msg = Cw721QueryMsg::Approval {
@@ -65,15 +94,12 @@ impl MarketplaceContract<'static> {
                 msg: to_binary(&query_approval_msg)?,
             }));
 
-
         // check if approval is never expired
         match approval_response {
-            Ok(approval) => {
-                match approval.approval.expires {
-                    Expiration::Never {} => {}
-                    _ => return Err(ContractError::Unauthorized {}),
-                }
-            }
+            Ok(approval) => match approval.approval.expires {
+                Expiration::Never {} => {}
+                _ => return Err(ContractError::Unauthorized {}),
+            },
             Err(_) => {
                 return Err(ContractError::CustomError {
                     val: "Require never expired approval".to_string(),
@@ -98,21 +124,12 @@ impl MarketplaceContract<'static> {
         };
         let listing_key = listing_key(&contract_address, &token_id);
 
-        // TODO what to do if listing already exists
-        //   currently we will throw an error, but people could want to change price and such
-        //   will test this later
-        let new_listing = self
-            .listings
-            .update(deps.storage, listing_key, |old| match old {
-                Some(old_listing) => {
-                    if old_listing.is_active() {
-                        Err(ContractError::AlreadyExists {})
-                    } else {
-                        Ok(listing)
-                    }
-                }
-                None => Ok(listing),
-            })?;
+        // we will override the listing if it already exists, so that we can update the auction config
+        let new_listing = self.listings.update(
+            deps.storage,
+            listing_key,
+            |_old| -> Result<Listing, ContractError> { Ok(listing) },
+        )?;
 
         // println!("Listing: {:?}", _listing);
         let auction_config_str = serde_json::to_string(&new_listing.auction_config);
@@ -139,7 +156,7 @@ impl MarketplaceContract<'static> {
     ) -> Result<Response, ContractError> {
         // get the listing
         let listing_key = listing_key(&contract_address, &token_id);
-        let listing = self.listings.load(deps.storage, listing_key.clone())?;
+        let mut listing = self.listings.load(deps.storage, listing_key.clone())?;
 
         // check if listing is active
         if !listing.is_active() {
@@ -153,36 +170,14 @@ impl MarketplaceContract<'static> {
             });
         }
 
-        // update listing
-        let mut new_listing = listing.clone();
-        new_listing.buyer = Some(info.sender.clone());
-        new_listing.status = ListingStatus::Sold {
-            buyer: info.sender.clone(),
-        };
+        listing.buyer = Some(info.sender.clone());
 
-        // save listing
-        self.listings
-            .replace(deps.storage, listing_key.clone(), Some(&new_listing), Some(&listing))?;
+        // remove the listing
+        self.listings.remove(deps.storage, listing_key.clone())?;
 
         match &listing.auction_config {
-            AuctionConfig::FixedPrice {
-                price,
-                start_time,
-                end_time
-            } => {
-                // check if current block is after start_time
-                if start_time.is_some() && !start_time.unwrap().is_expired(&env.block) {
-                    return Err(ContractError::CustomError {
-                        val: ("Auction not started".to_string()),
-                    });
-                }
-
-                if end_time.is_some() && end_time.unwrap().is_expired(&env.block) {
-                    return Err(ContractError::CustomError {
-                        val: ("Auction ended".to_string()),
-                    });
-                }
-                self.process_buy_fixed_price(deps, env, info, &new_listing, price)
+            AuctionConfig::FixedPrice { .. } => {
+                self.process_buy_fixed_price(deps, env, info, &listing)
             }
             _ => {
                 // TODO where should we store auction_contract? in auction_config or as in a list
@@ -197,95 +192,126 @@ impl MarketplaceContract<'static> {
     fn process_buy_fixed_price(
         self: Self,
         deps: DepsMut,
-        _env: Env,
+        env: Env,
         info: MessageInfo,
         listing: &Listing,
-        price: &Coin,
     ) -> Result<Response, ContractError> {
-        // check if enough funds
-        if info.funds.len() == 0 || info.funds[0] != *price {
-            return Err(ContractError::InsufficientFunds {});
+        match &listing.auction_config {
+            AuctionConfig::FixedPrice {
+                price,
+                start_time,
+                end_time,
+            } => {
+                // check if current block is after start_time
+                if start_time.is_some() && !start_time.unwrap().is_expired(&env.block) {
+                    return Err(ContractError::CustomError {
+                        val: ("Auction not started".to_string()),
+                    });
+                }
+
+                if end_time.is_some() && end_time.unwrap().is_expired(&env.block) {
+                    return Err(ContractError::CustomError {
+                        val: ("Auction ended".to_string()),
+                    });
+                }
+                // check if enough funds
+                if info.funds.len() == 0 || info.funds[0] != *price {
+                    return Err(ContractError::InsufficientFunds {});
+                }
+
+                // get cw2981 royalties info
+                let royalty_query_msg = Cw2981QueryMsg::Extension {
+                    msg: cw2981_royalties::msg::Cw2981QueryMsg::RoyaltyInfo {
+                        token_id: listing.token_id.clone(),
+                        sale_price: price.amount,
+                    },
+                };
+                let royalty_info_rsp: Result<RoyaltiesInfoResponse, cosmwasm_std::StdError> =
+                    deps.querier.query(&QueryRequest::Wasm(WasmQuery::Smart {
+                        contract_addr: listing.contract_address.to_string(),
+                        msg: to_binary(&royalty_query_msg)?,
+                    }));
+
+                let (creator, royalty_amount): (Option<Addr>, Option<Uint128>) =
+                    match royalty_info_rsp {
+                        Ok(RoyaltiesInfoResponse {
+                            address,
+                            royalty_amount,
+                        }) => {
+                            if address == "" || royalty_amount == Uint128::zero() {
+                                (None, None)
+                            } else {
+                                (
+                                    Some(deps.api.addr_validate(&address)?),
+                                    Some(royalty_amount),
+                                )
+                            }
+                        }
+                        Err(_) => (None, None),
+                    };
+
+                // message to transfer nft to buyer
+                let transfer_nft_msg = WasmMsg::Execute {
+                    contract_addr: listing.contract_address.to_string(),
+                    msg: to_binary(&Cw2981ExecuteMsg::TransferNft {
+                        recipient: listing.buyer.clone().unwrap().into_string(),
+                        token_id: listing.token_id.clone(),
+                    })?,
+                    funds: vec![],
+                };
+                let mut res = Response::new().add_message(transfer_nft_msg);
+
+                let config = self.config.load(deps.storage)?;
+
+                // there is no royalty, creator is the owner, or royalty amount is 0
+                if creator == None
+                    || creator.as_ref().unwrap().to_string() == config.owner.to_string()
+                    || royalty_amount == None
+                    || royalty_amount.unwrap().is_zero()
+                {
+                    // transfer all funds to seller
+                    let transfer_token_msg = BankMsg::Send {
+                        to_address: listing.seller.to_string(),
+                        amount: info.funds,
+                    };
+                    res = res.add_message(transfer_token_msg);
+                } else {
+                    // transfer royalty to minter
+                    let transfer_token_minter_msg = BankMsg::Send {
+                        to_address: creator.unwrap().to_string(),
+                        amount: vec![Coin {
+                            denom: price.denom.clone(),
+                            amount: royalty_amount.unwrap(),
+                        }],
+                    };
+
+                    // transfer remaining funds to seller
+                    let transfer_token_seller_msg = BankMsg::Send {
+                        to_address: config.owner.to_string(),
+                        amount: vec![Coin {
+                            denom: price.denom.clone(),
+                            amount: price.amount - royalty_amount.unwrap(),
+                        }],
+                    };
+                    res = res
+                        .add_message(transfer_token_minter_msg)
+                        .add_message(transfer_token_seller_msg);
+                }
+
+                res = res
+                    .add_attribute("method", "buy")
+                    .add_attribute("contract_address", listing.contract_address.to_string())
+                    .add_attribute("token_id", listing.token_id.to_string())
+                    .add_attribute("buyer", info.sender);
+
+                return Ok(res);
+            }
+            _ => {
+                return Err(ContractError::CustomError {
+                    val: ("Invalid Auction Config".to_string()),
+                });
+            }
         }
-
-        // get cw2981 royalties info
-        let royalty_query_msg = Cw2981QueryMsg::Extension {
-            msg: cw2981_royalties::msg::Cw2981QueryMsg::RoyaltyInfo {
-                token_id: listing.token_id.clone(),
-                sale_price: price.amount,
-            },
-        };
-        let royalty_info_rsp: Result<RoyaltiesInfoResponse, cosmwasm_std::StdError> =
-            deps.querier.query(&QueryRequest::Wasm(WasmQuery::Smart {
-                contract_addr: listing.contract_address.to_string(),
-                msg: to_binary(&royalty_query_msg)?,
-            }));
-
-        let (creator, royalty_amount): (Option<Addr>, Option<Uint128>) = match royalty_info_rsp {
-            Ok(RoyaltiesInfoResponse {
-                address,
-                royalty_amount,
-            }) => (
-                Some(deps.api.addr_validate(&address)?),
-                Some(royalty_amount),
-            ),
-            Err(_) => (None, None),
-        };
-
-        // message to transfer nft to buyer
-        let transfer_nft_msg = WasmMsg::Execute {
-            contract_addr: listing.contract_address.to_string(),
-            msg: to_binary(&Cw2981ExecuteMsg::TransferNft {
-                recipient: listing.buyer.clone().unwrap().into_string(),
-                token_id: listing.token_id.clone(),
-            })?,
-            funds: vec![],
-        };
-        let mut res = Response::new().add_message(transfer_nft_msg);
-
-        let config = self.config.load(deps.storage)?;
-
-        // there is no royalty, creator is the owner, or royalty amount is 0
-        if creator == None
-            || creator.as_ref().unwrap().to_string() == config.owner.to_string()
-            || royalty_amount == None
-            || royalty_amount.unwrap().is_zero()
-        {
-            // transfer all funds to seller
-            let transfer_token_msg = BankMsg::Send {
-                to_address: listing.seller.to_string(),
-                amount: info.funds,
-            };
-            res = res.add_message(transfer_token_msg);
-        } else {
-            // transfer royalty to minter
-            let transfer_token_minter_msg = BankMsg::Send {
-                to_address: creator.unwrap().to_string(),
-                amount: vec![Coin {
-                    denom: price.denom.clone(),
-                    amount: royalty_amount.unwrap(),
-                }],
-            };
-
-            // transfer remaining funds to seller
-            let transfer_token_seller_msg = BankMsg::Send {
-                to_address: config.owner.to_string(),
-                amount: vec![Coin {
-                    denom: price.denom.clone(),
-                    amount: price.amount - royalty_amount.unwrap(),
-                }],
-            };
-            res = res
-                .add_message(transfer_token_minter_msg)
-                .add_message(transfer_token_seller_msg);
-        }
-
-        res = res
-            .add_attribute("method", "buy")
-            .add_attribute("contract_address", listing.contract_address.to_string())
-            .add_attribute("token_id", listing.token_id.to_string())
-            .add_attribute("buyer", info.sender);
-
-        Ok(res)
     }
 
     pub fn execute_cancel(
@@ -329,7 +355,8 @@ impl MarketplaceContract<'static> {
         _deps: DepsMut,
         _env: Env,
         _info: MessageInfo,
-        _auction_contract: AuctionContract,) -> Result<Response, ContractError> {
+        _auction_contract: AuctionContract,
+    ) -> Result<Response, ContractError> {
         // check if auction contract already exists
 
         // add auction contract

@@ -1,19 +1,19 @@
+use cosmwasm_std::{Addr, BlockInfo, Coin};
+use cw721::Expiration;
+use cw_storage_plus::{Index, IndexList, IndexedMap, Item, MultiIndex, UniqueIndex};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use cosmwasm_std::{Addr, Coin, BlockInfo};
-use cw_storage_plus::{Index, IndexList, IndexedMap, Item, MultiIndex, UniqueIndex};
-use cw721::Expiration;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub enum AuctionConfig {
     FixedPrice {
         price: Coin,
         start_time: Option<Expiration>, // we use expiration for convinience
-        end_time: Option<Expiration>, // it's required that start_time < end_time
+        end_time: Option<Expiration>,   // it's required that start_time < end_time
     },
     Other {
         auction: AuctionContract,
-        config: String
+        config: String,
     },
 }
 
@@ -37,11 +37,11 @@ pub type TokenId = String;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct Listing {
-    pub contract_address: Addr,            // contract contains the NFT
-    pub token_id: String,                  // id of the NFT
+    pub contract_address: Addr,        // contract contains the NFT
+    pub token_id: String,              // id of the NFT
     pub auction_config: AuctionConfig, // config of the auction, should be validated by the auction contract when created
     pub seller: Addr,
-    pub buyer: Option<Addr>,           // buyer, will be initialized to None
+    pub buyer: Option<Addr>, // buyer, will be initialized to None
     pub status: ListingStatus,
 }
 
@@ -57,17 +57,13 @@ impl Listing {
     // we don't care about other statuses as checking for expired is only useful for ongoing listings
     pub fn is_expired(&self, block_info: &BlockInfo) -> bool {
         match self.status {
-            ListingStatus::Ongoing {} => {
-                match self.auction_config {
-                    AuctionConfig::FixedPrice { end_time, .. } => {
-                        match end_time {
-                            Some(time) => time.is_expired(block_info),
-                            None => false,
-                        }
-                    }
-                    AuctionConfig::Other { .. } => false,
-                }
-            }
+            ListingStatus::Ongoing {} => match self.auction_config {
+                AuctionConfig::FixedPrice { end_time, .. } => match end_time {
+                    Some(time) => time.is_expired(block_info),
+                    None => false,
+                },
+                AuctionConfig::Other { .. } => false,
+            },
             _ => false,
         }
     }
@@ -116,7 +112,6 @@ pub struct Config {
 // When they are upgraded, the new contract will decide to process a config or reject it based on code_id
 // For example, if the new contract is a performance upgrade, it can accept the config
 // If the new contract is a breaking change or a bug fix, it can reject the config
-
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct AuctionContract {
