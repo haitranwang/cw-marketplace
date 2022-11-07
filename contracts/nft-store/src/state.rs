@@ -48,10 +48,7 @@ pub struct Listing {
 
 impl Listing {
     pub fn is_active(&self) -> bool {
-        match self.status {
-            ListingStatus::Ongoing {} => true,
-            _ => false,
-        }
+        matches!(self.status, ListingStatus::Ongoing {})
     }
 }
 

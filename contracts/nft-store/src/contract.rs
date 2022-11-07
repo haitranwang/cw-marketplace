@@ -19,7 +19,7 @@ pub fn instantiate(
     msg: InstantiateMsg,
 ) -> Result<Response, ContractError> {
     let conf = Config {
-        owner: msg.owner.clone(),
+        owner: msg.owner,
     };
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
     store_contract().config.save(deps.storage, &conf)?;

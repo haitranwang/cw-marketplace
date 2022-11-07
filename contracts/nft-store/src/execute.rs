@@ -16,7 +16,7 @@ use crate::{
 };
 
 impl StoreContract<'static> {
-    pub fn validate_auction_config(self: &Self, auction_config: &AuctionConfig) -> bool {
+    pub fn validate_auction_config(&self, auction_config: &AuctionConfig) -> bool {
         match auction_config {
             AuctionConfig::FixedPrice {
                 price,
@@ -37,9 +37,9 @@ impl StoreContract<'static> {
                 }
                 true
             }
-            AuctionConfig::Other { auction, config } => {
+            AuctionConfig::Other {..} => {
                 // for now, just return false
-                return false;
+                false
                 // parse config as json
                 // let json_config: serde_json::Value = serde_json::from_str(config).unwrap();
                 // check if config has auction contract address
@@ -52,7 +52,7 @@ impl StoreContract<'static> {
     }
 
     pub fn execute_list_nft(
-        self: Self,
+        &self,
         deps: DepsMut,
         env: Env,
         info: MessageInfo,
@@ -92,7 +92,7 @@ impl StoreContract<'static> {
             }
         }
 
-        if self.validate_auction_config(&auction_config) == false {
+        if !self.validate_auction_config(&auction_config) {
             return Err(ContractError::CustomError {
                 val: "Invalid auction config".to_string(),
             });
@@ -130,7 +130,7 @@ impl StoreContract<'static> {
     }
 
     pub fn execute_buy(
-        self: Self,
+        self,
         deps: DepsMut,
         env: Env,
         info: MessageInfo,
@@ -139,7 +139,7 @@ impl StoreContract<'static> {
     ) -> Result<Response, ContractError> {
         // get the listing
         let listing_key = listing_key(&contract_address, &token_id);
-        let mut listing = self.listings.load(deps.storage, listing_key.clone())?;
+        let listing = self.listings.load(deps.storage, listing_key.clone())?;
 
         // check if listing is active
         if !listing.is_active() {
@@ -157,26 +157,25 @@ impl StoreContract<'static> {
         }
 
         // remove the listing
-        self.listings.remove(deps.storage, listing_key.clone())?;
+        self.listings.remove(deps.storage, listing_key)?;
 
         match &listing.auction_config {
             AuctionConfig::FixedPrice {
                 price,
-                start_time,
-                end_time,
+                ..
             } => self.process_buy_fixed_price(deps, env, info, &listing, price),
             _ => {
                 // TODO where should we store auction_contract? in auction_config or as in a list
                 // get auction contract and validate bid
-                return Err(ContractError::CustomError {
+                Err(ContractError::CustomError {
                     val: ("Invalid Auction Config".to_string()),
-                });
+                })
             }
         }
     }
 
     fn process_buy_fixed_price(
-        self: Self,
+        self,
         deps: DepsMut,
         _env: Env,
         info: MessageInfo,
@@ -184,7 +183,7 @@ impl StoreContract<'static> {
         price: &Coin,
     ) -> Result<Response, ContractError> {
         // check if enough funds
-        if info.funds.len() == 0 || info.funds[0] != *price {
+        if info.funds.is_empty() || info.funds[0] != *price {
             return Err(ContractError::InsufficientFunds {});
         }
 
@@ -228,7 +227,7 @@ impl StoreContract<'static> {
 
         // there is no royalty, creator is the owner, or royalty amount is 0
         if creator == None
-            || creator.as_ref().unwrap().to_string() == config.owner.to_string()
+            || creator.as_ref().unwrap() == &config.owner
             || royalty_amount == None
             || royalty_amount.unwrap().is_zero()
         {
@@ -271,7 +270,7 @@ impl StoreContract<'static> {
     }
 
     pub fn execute_cancel(
-        self: Self,
+        self,
         deps: DepsMut,
         env: Env,
         info: MessageInfo,
@@ -316,11 +315,11 @@ impl StoreContract<'static> {
 
     // function to add a new auction contract
     pub fn execute_add_auction_contract(
-        self: Self,
-        deps: DepsMut,
+        self,
+        _deps: DepsMut,
         _env: Env,
-        info: MessageInfo,
-        auction_contract: AuctionContract,
+        _info: MessageInfo,
+        _auction_contract: AuctionContract,
     ) -> Result<Response, ContractError> {
         // check if auction contract already exists
 
@@ -332,11 +331,11 @@ impl StoreContract<'static> {
 
     // function to remove an auction contract
     pub fn execute_remove_auction_contract(
-        self: Self,
-        deps: DepsMut,
+        self,
+        _deps: DepsMut,
         _env: Env,
-        info: MessageInfo,
-        contract_address: Addr,
+        _info: MessageInfo,
+        _contract_address: Addr,
     ) -> Result<Response, ContractError> {
         // check if auction contract exists
 
