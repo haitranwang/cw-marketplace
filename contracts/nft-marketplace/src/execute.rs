@@ -18,17 +18,25 @@ use crate::{
 impl MarketplaceContract<'static> {
     pub fn validate_auction_config(self: &Self, auction_config: &AuctionConfig) -> bool {
         match auction_config {
-            AuctionConfig::FixedPrice { price, start_time, end_time } => {
-                if price.amount.is_zero() { // since price is Uint128, it cannot be negative, we only
-                                            // need to check if it's zero
+            AuctionConfig::FixedPrice {
+                price,
+                start_time,
+                end_time,
+            } => {
+                if price.amount.is_zero() {
+                    // since price is Uint128, it cannot be negative, we only
+                    // need to check if it's zero
                     return false;
                 }
                 // if start_time or end_time is not set, we don't need to check
-                if start_time.is_some() && end_time.is_some() && start_time.unwrap() >= end_time.unwrap() {
+                if start_time.is_some()
+                    && end_time.is_some()
+                    && start_time.unwrap() >= end_time.unwrap()
+                {
                     return false;
                 }
                 true
-            },
+            }
             AuctionConfig::Other { auction, config } => {
                 // for now, just return false
                 return false;
@@ -67,7 +75,7 @@ impl MarketplaceContract<'static> {
                 if owner.owner != info.sender.to_string() {
                     return Err(ContractError::Unauthorized {});
                 }
-            },
+            }
             Err(_) => {
                 return Err(ContractError::Unauthorized {});
             }
@@ -88,12 +96,10 @@ impl MarketplaceContract<'static> {
 
         // check if approval is never expired
         match approval_response {
-            Ok(approval) => {
-                match approval.approval.expires {
-                    Expiration::Never {} => {}
-                    _ => return Err(ContractError::Unauthorized {}),
-                }
-            }
+            Ok(approval) => match approval.approval.expires {
+                Expiration::Never {} => {}
+                _ => return Err(ContractError::Unauthorized {}),
+            },
             Err(_) => {
                 return Err(ContractError::CustomError {
                     val: "Require never expired approval".to_string(),
@@ -119,11 +125,11 @@ impl MarketplaceContract<'static> {
         let listing_key = listing_key(&contract_address, &token_id);
 
         // we will override the listing if it already exists, so that we can update the auction config
-        let new_listing = self
-            .listings
-            .update(deps.storage, listing_key, |_old| -> Result<Listing, ContractError> {
-                Ok(listing)
-            })?;
+        let new_listing = self.listings.update(
+            deps.storage,
+            listing_key,
+            |_old| -> Result<Listing, ContractError> { Ok(listing) },
+        )?;
 
         // println!("Listing: {:?}", _listing);
         let auction_config_str = serde_json::to_string(&new_listing.auction_config);
@@ -167,13 +173,10 @@ impl MarketplaceContract<'static> {
         listing.buyer = Some(info.sender.clone());
 
         // remove the listing
-        self.listings
-            .remove(deps.storage, listing_key.clone())?;
+        self.listings.remove(deps.storage, listing_key.clone())?;
 
         match &listing.auction_config {
-            AuctionConfig::FixedPrice {
-                ..
-            } => {
+            AuctionConfig::FixedPrice { .. } => {
                 self.process_buy_fixed_price(deps, env, info, &listing)
             }
             _ => {
@@ -197,9 +200,8 @@ impl MarketplaceContract<'static> {
             AuctionConfig::FixedPrice {
                 price,
                 start_time,
-                end_time
+                end_time,
             } => {
-
                 // check if current block is after start_time
                 if start_time.is_some() && !start_time.unwrap().is_expired(&env.block) {
                     return Err(ContractError::CustomError {
@@ -230,19 +232,23 @@ impl MarketplaceContract<'static> {
                         msg: to_binary(&royalty_query_msg)?,
                     }));
 
-                let (creator, royalty_amount): (Option<Addr>, Option<Uint128>) = match royalty_info_rsp {
-                    Ok(RoyaltiesInfoResponse {
-                        address,
-                        royalty_amount,
-                    }) => {
-                        if address == "" || royalty_amount == Uint128::zero() {
-                            (None, None)
-                        } else {
-                            (Some(deps.api.addr_validate(&address)?), Some(royalty_amount))
+                let (creator, royalty_amount): (Option<Addr>, Option<Uint128>) =
+                    match royalty_info_rsp {
+                        Ok(RoyaltiesInfoResponse {
+                            address,
+                            royalty_amount,
+                        }) => {
+                            if address == "" || royalty_amount == Uint128::zero() {
+                                (None, None)
+                            } else {
+                                (
+                                    Some(deps.api.addr_validate(&address)?),
+                                    Some(royalty_amount),
+                                )
+                            }
                         }
-                    },
-                    Err(_) => (None, None),
-                };
+                        Err(_) => (None, None),
+                    };
 
                 // message to transfer nft to buyer
                 let transfer_nft_msg = WasmMsg::Execute {
@@ -349,7 +355,8 @@ impl MarketplaceContract<'static> {
         _deps: DepsMut,
         _env: Env,
         _info: MessageInfo,
-        _auction_contract: AuctionContract,) -> Result<Response, ContractError> {
+        _auction_contract: AuctionContract,
+    ) -> Result<Response, ContractError> {
         // check if auction contract already exists
 
         // add auction contract

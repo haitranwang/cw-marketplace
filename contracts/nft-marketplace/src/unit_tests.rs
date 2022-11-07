@@ -13,7 +13,7 @@ mod tests {
     };
     use cw2981_royalties::msg::{Cw2981QueryMsg, RoyaltiesInfoResponse};
     use cw2981_royalties::{ExecuteMsg as Cw2981ExecuteMsg, QueryMsg as Cw721QueryMsg};
-    use cw721::{Approval, ApprovalResponse};
+    use cw721::{Approval, ApprovalResponse, OwnerOfResponse};
     use cw_utils::Expiration;
 
     const MOCK_CW2981_ADDR: &str = "cw2981_addr";
@@ -35,6 +35,7 @@ mod tests {
                                     Cw2981QueryMsg::RoyaltyInfo { token_id, .. } => {
                                         match token_id.as_str() {
                                             "1" => {
+                                                // owner is not creator, royalty is 10
                                                 let royalty_info = RoyaltiesInfoResponse {
                                                     address: Addr::unchecked("creator").to_string(),
                                                     royalty_amount: 10u128.into(),
@@ -45,6 +46,7 @@ mod tests {
                                                 return cosmwasm_std::SystemResult::Ok(result);
                                             }
                                             "2" => {
+                                                // owner is not creator, royalty is 0
                                                 let royalty_info = RoyaltiesInfoResponse {
                                                     address: Addr::unchecked("creator").to_string(),
                                                     royalty_amount: 0u128.into(),
@@ -55,6 +57,7 @@ mod tests {
                                                 return cosmwasm_std::SystemResult::Ok(result);
                                             }
                                             "3" => {
+                                                // owner is creator, royalty is 10
                                                 let royalty_info = RoyaltiesInfoResponse {
                                                     address: Addr::unchecked("owner").to_string(),
                                                     royalty_amount: 10u128.into(),
@@ -85,9 +88,23 @@ mod tests {
                                 let result = ContractResult::Ok(
                                     to_binary(&ApprovalResponse {
                                         approval: Approval {
-                                            spender: "creator".to_string(),
+                                            spender: "owner".to_string(),
                                             expires: Expiration::Never {},
                                         },
+                                    })
+                                    .unwrap(),
+                                );
+                                return cosmwasm_std::SystemResult::Ok(result);
+                            }
+                            Cw721QueryMsg::OwnerOf {
+                                token_id,
+                                include_expired,
+                            } => {
+                                // just return owner
+                                let result = ContractResult::Ok(
+                                    to_binary(&OwnerOfResponse {
+                                        owner: "owner".to_string(),
+                                        approvals: vec![],
                                     })
                                     .unwrap(),
                                 );
@@ -112,12 +129,12 @@ mod tests {
         deps
     }
 
-    // we will instantiate a contract with account "creator" but admin is "owner"
+    // we will instantiate a contract with account "owner" but admin is "owner"
     fn instantiate_contract(deps: DepsMut) -> Result<Response, ContractError> {
         let msg = InstantiateMsg {
             owner: Addr::unchecked("owner"),
         };
-        let info = mock_info("creator", &coins(1000, "uaura"));
+        let info = mock_info("owner", &coins(1000, "uaura"));
 
         instantiate(deps, mock_env(), info, msg)
     }
@@ -150,52 +167,11 @@ mod tests {
                     amount: Uint128::from(100u128),
                 },
                 start_time,
-                end_time
+                end_time,
             },
         };
         let info = mock_info(sender, &coins(1000, "uaura"));
         execute(deps, mock_env(), info, msg)
-    }
-
-    #[test]
-    fn owner_can_create_listing() {
-        let mut deps = mock_deps();
-
-        for i in 0..20 {
-            create_listing(
-                deps.as_mut(),
-                &"owner".to_string(),
-                Addr::unchecked(MOCK_CW2981_ADDR),
-                &i.to_string(),
-                None,
-                None,
-            )
-            .unwrap();
-        }
-
-        // now can query the listing
-        let query_res = contract()
-            .query_listings_by_contract_address(
-                deps.as_ref(),
-                ListingStatus::Ongoing {}.name(),
-                Addr::unchecked(MOCK_CW2981_ADDR),
-                Some("10".to_string()),
-                Some(10),
-            )
-            .unwrap();
-        println!("Query Response: {:?}", &query_res);
-        assert_eq!(query_res.listings.len(), 10);
-
-        // can get 1 listing
-        let query_listing = contract()
-            .query_listing(
-                deps.as_ref(),
-                Addr::unchecked(MOCK_CW2981_ADDR),
-                "5".to_string(),
-            )
-            .unwrap();
-        println!("Listing 5: {:?}", &query_listing);
-        assert_eq!(query_listing.token_id, "5");
     }
 
     #[test]
@@ -204,7 +180,7 @@ mod tests {
 
         let response = create_listing(
             deps.as_mut(),
-            &"creator".to_string(),
+            &"owner".to_string(),
             Addr::unchecked(MOCK_CW2981_ADDR),
             &"1".to_string(),
             None,
@@ -215,49 +191,121 @@ mod tests {
     }
 
     #[test]
+    fn cannot_update_listing_of_other() {
+        let mut deps = mock_deps();
+
+        let response = create_listing(
+            deps.as_mut(),
+            &"owner".to_string(),
+            Addr::unchecked(MOCK_CW2981_ADDR),
+            &"1".to_string(),
+            None,
+            None,
+        );
+        println!("Response: {:?}", &response);
+        assert!(response.is_ok());
+
+        let msg = ExecuteMsg::ListNft {
+            contract_address: Addr::unchecked(MOCK_CW2981_ADDR).to_string(),
+            token_id: "1".to_string(),
+            auction_config: AuctionConfig::FixedPrice {
+                price: Coin {
+                    denom: "uaura".to_string(),
+                    amount: Uint128::from(200u128),
+                },
+                start_time: None,
+                end_time: None,
+            },
+        };
+        let info = mock_info("another_user", &[]);
+        let response = execute(deps.as_mut(), mock_env(), info, msg);
+        println!("Response: {:?}", &response);
+        assert!(response.is_err());
+    }
+
+    #[test]
+    fn update_listing_by_owner() {
+        let mut deps = mock_deps();
+
+        let response = create_listing(
+            deps.as_mut(),
+            &"owner".to_string(),
+            Addr::unchecked(MOCK_CW2981_ADDR),
+            &"1".to_string(),
+            None,
+            None,
+        );
+
+        // listing created
+        assert!(response.is_ok());
+
+        // another user tries to update the listing
+        let err_response = create_listing(
+            deps.as_mut(),
+            &"another_user".to_string(),
+            Addr::unchecked(MOCK_CW2981_ADDR),
+            &"1".to_string(),
+            None,
+            None,
+        );
+
+        println!("Error Response: {:?}", &err_response);
+        assert!(err_response.is_err());
+
+        // owner tries to update the listing
+        let update_response = create_listing(
+            deps.as_mut(),
+            &"owner".to_string(),
+            Addr::unchecked(MOCK_CW2981_ADDR),
+            &"1".to_string(),
+            None,
+            None,
+        );
+
+        println!("Update Response: {:?}", &update_response);
+        assert!(update_response.is_ok());
+    }
+
+    #[test]
     fn owner_cancel_listing() {
         let mut deps = mock_deps();
 
-        for i in 0..20 {
-            create_listing(
-                deps.as_mut(),
-                &"owner".to_string(),
-                Addr::unchecked(MOCK_CW2981_ADDR),
-                &i.to_string(),
-                None,
-                None
-            )
-            .unwrap();
-        }
+        create_listing(
+            deps.as_mut(),
+            &"owner".to_string(),
+            Addr::unchecked(MOCK_CW2981_ADDR),
+            &"1".to_string(),
+            None,
+            None,
+        )
+        .unwrap();
 
-        let listing_5 = contract()
+        let listing = contract()
             .query_listing(
                 deps.as_ref(),
                 Addr::unchecked(MOCK_CW2981_ADDR),
-                "5".to_string(),
+                "1".to_string(),
             )
             .unwrap();
-        // println!("Listing 5: {:?}", &listing_5);
-        assert_eq!(listing_5.token_id, "5");
+        assert_eq!(listing.token_id, "1");
 
         // cancel the listing
         let msg = ExecuteMsg::Cancel {
             contract_address: MOCK_CW2981_ADDR.to_string(),
-            token_id: "5".to_string(),
+            token_id: "1".to_string(),
         };
 
         // send request with correct owner
-        let mock_info_correct = mock_info("owner", &coins(100, "uaura"));
+        let mock_info_correct = mock_info("owner", &[]);
         let _response = execute(deps.as_mut(), mock_env(), mock_info_correct, msg).unwrap();
         // println!("Response: {:?}", &response);
 
         // assert error on load listing
-        let res = contract()
-                .query_listing(
-                    deps.as_ref(),
-                    Addr::unchecked(MOCK_CW2981_ADDR),
-                    "5".to_string(),
-                );
+        let res = contract().query_listing(
+            deps.as_ref(),
+            Addr::unchecked(MOCK_CW2981_ADDR),
+            "1".to_string(),
+        );
         println!("Response: {:?}", &res);
         assert!(res.is_err());
     }
@@ -334,12 +382,7 @@ mod tests {
 
         env.block.height = 101;
 
-        let response = execute(
-            deps.as_mut(),
-            env,
-            mock_info_wrong_sender,
-            msg.clone(),
-        );
+        let response = execute(deps.as_mut(), env, mock_info_wrong_sender, msg.clone());
         match response {
             Ok(_) => {}
             Err(e) => panic!("Unexpected error: {}", e),
@@ -453,7 +496,7 @@ mod tests {
     }
 
     #[test]
-    fn owner_cannot_buy() {
+    fn cannot_buy_as_owner() {
         let mut deps = mock_deps();
 
         create_listing(
@@ -517,7 +560,7 @@ mod tests {
     }
 
     #[test]
-    fn can_buy_listing() {
+    fn buy_listing_with_royalty() {
         let mut deps = mock_deps();
 
         create_listing(
@@ -538,8 +581,8 @@ mod tests {
         let mock_info_buyer = mock_info("buyer", &coins(100, "uaura"));
 
         let response = execute(deps.as_mut(), mock_env(), mock_info_buyer, msg.clone()).unwrap();
-        assert_eq!(3, response.messages.len());
         println!("Response: {:?}", &response);
+        assert_eq!(3, response.messages.len());
         assert_eq!(
             response.messages[0],
             SubMsg::new(CosmosMsg::Wasm(WasmMsg::Execute {
@@ -559,7 +602,7 @@ mod tests {
                 to_address: "creator".to_string(),
                 amount: vec![cosmwasm_std::coin(10, "uaura")],
             })),
-            "should transfer royalty to creator"
+            "should transfer royalty to owner"
         );
         assert_eq!(
             response.messages[2],
@@ -730,7 +773,7 @@ mod tests {
     }
 
     #[test]
-    fn can_buy_listing_when_owner_is_creator() {
+    fn buy_when_owner_is_creator() {
         let mut deps = mock_deps();
 
         create_listing(

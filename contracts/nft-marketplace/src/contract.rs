@@ -109,9 +109,7 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
             token_id,
         )?),
         // return all supported auction contracts
-        QueryMsg::AuctionContracts {} => {
-            to_binary(&contract().query_auction_contracts(deps)?)
-        }
+        QueryMsg::AuctionContracts {} => to_binary(&contract().query_auction_contracts(deps)?),
         QueryMsg::ValidateAuctionConfig {
             contract_address,
             code_id,
