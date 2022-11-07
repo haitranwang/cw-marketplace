@@ -43,7 +43,7 @@ mod tests {
                                                 let result = ContractResult::Ok(
                                                     to_binary(&royalty_info).unwrap(),
                                                 );
-                                                return cosmwasm_std::SystemResult::Ok(result);
+                                                cosmwasm_std::SystemResult::Ok(result)
                                             }
                                             "2" => {
                                                 // owner is not creator, royalty is 0
@@ -54,7 +54,7 @@ mod tests {
                                                 let result = ContractResult::Ok(
                                                     to_binary(&royalty_info).unwrap(),
                                                 );
-                                                return cosmwasm_std::SystemResult::Ok(result);
+                                                cosmwasm_std::SystemResult::Ok(result)
                                             }
                                             "3" => {
                                                 // owner is creator, royalty is 10
@@ -65,25 +65,25 @@ mod tests {
                                                 let result = ContractResult::Ok(
                                                     to_binary(&royalty_info).unwrap(),
                                                 );
-                                                return cosmwasm_std::SystemResult::Ok(result);
+                                                cosmwasm_std::SystemResult::Ok(result)
                                             }
                                             _ => {
                                                 let result =
                                                     ContractResult::Err("Not Found".to_string());
-                                                return cosmwasm_std::SystemResult::Ok(result);
+                                                cosmwasm_std::SystemResult::Ok(result)
                                             }
                                         }
                                     }
                                     Cw2981QueryMsg::CheckRoyalties {} => {
                                         let result = ContractResult::Ok(to_binary(&true).unwrap());
-                                        return cosmwasm_std::SystemResult::Ok(result);
+                                        cosmwasm_std::SystemResult::Ok(result)
                                     }
                                 }
                             }
                             Cw721QueryMsg::Approval {
-                                token_id,
-                                spender,
-                                include_expired,
+                                token_id: _,
+                                spender: _,
+                                include_expired: _,
                             } => {
                                 let result = ContractResult::Ok(
                                     to_binary(&ApprovalResponse {
@@ -94,11 +94,11 @@ mod tests {
                                     })
                                     .unwrap(),
                                 );
-                                return cosmwasm_std::SystemResult::Ok(result);
+                                cosmwasm_std::SystemResult::Ok(result)
                             }
                             Cw721QueryMsg::OwnerOf {
-                                token_id,
-                                include_expired,
+                                token_id: _,
+                                include_expired: _,
                             } => {
                                 // just return owner
                                 let result = ContractResult::Ok(
@@ -108,11 +108,11 @@ mod tests {
                                     })
                                     .unwrap(),
                                 );
-                                return cosmwasm_std::SystemResult::Ok(result);
+                                cosmwasm_std::SystemResult::Ok(result)
                             }
                             _ => {
                                 let result = ContractResult::Err("Not Found".to_string());
-                                return cosmwasm_std::SystemResult::Ok(result);
+                                cosmwasm_std::SystemResult::Ok(result)
                             }
                         }
                     }
@@ -335,7 +335,7 @@ mod tests {
             deps.as_mut(),
             mock_env(),
             mock_info_wrong_sender,
-            msg.clone(),
+            msg,
         );
         match response {
             Ok(_) => panic!("Expected error"),
@@ -382,7 +382,7 @@ mod tests {
 
         env.block.height = 101;
 
-        let response = execute(deps.as_mut(), env, mock_info_wrong_sender, msg.clone());
+        let response = execute(deps.as_mut(), env, mock_info_wrong_sender, msg);
         match response {
             Ok(_) => {}
             Err(e) => panic!("Unexpected error: {}", e),
@@ -520,7 +520,7 @@ mod tests {
             deps.as_mut(),
             mock_env(),
             mock_info_wrong_sender,
-            msg.clone(),
+            msg,
         );
         match response {
             Ok(_) => panic!("Expected error"),
@@ -550,7 +550,7 @@ mod tests {
         };
         let mock_info_buyer = mock_info("buyer", &coins(99, "uaura"));
 
-        let response = execute(deps.as_mut(), mock_env(), mock_info_buyer, msg.clone());
+        let response = execute(deps.as_mut(), mock_env(), mock_info_buyer, msg);
         println!("Response: {:?}", &response);
         match response {
             Ok(_) => panic!("Expected error"),
@@ -580,7 +580,7 @@ mod tests {
         };
         let mock_info_buyer = mock_info("buyer", &coins(100, "uaura"));
 
-        let response = execute(deps.as_mut(), mock_env(), mock_info_buyer, msg.clone()).unwrap();
+        let response = execute(deps.as_mut(), mock_env(), mock_info_buyer, msg).unwrap();
         println!("Response: {:?}", &response);
         assert_eq!(3, response.messages.len());
         assert_eq!(
@@ -699,7 +699,7 @@ mod tests {
         };
         let mock_info_buyer = mock_info("buyer", &coins(100, "uaura"));
 
-        let response = execute(deps.as_mut(), mock_env(), mock_info_buyer, msg.clone()).unwrap();
+        let response = execute(deps.as_mut(), mock_env(), mock_info_buyer, msg).unwrap();
         assert_eq!(2, response.messages.len());
         println!("Response: {:?}", &response);
         assert_eq!(
@@ -746,7 +746,7 @@ mod tests {
         };
         let mock_info_buyer = mock_info("buyer", &coins(100, "uaura"));
 
-        let response = execute(deps.as_mut(), mock_env(), mock_info_buyer, msg.clone()).unwrap();
+        let response = execute(deps.as_mut(), mock_env(), mock_info_buyer, msg).unwrap();
         assert_eq!(2, response.messages.len());
         println!("Response: {:?}", &response);
         assert_eq!(
@@ -793,7 +793,7 @@ mod tests {
         };
         let mock_info_buyer = mock_info("buyer", &coins(100, "uaura"));
 
-        let response = execute(deps.as_mut(), mock_env(), mock_info_buyer, msg.clone()).unwrap();
+        let response = execute(deps.as_mut(), mock_env(), mock_info_buyer, msg).unwrap();
         assert_eq!(2, response.messages.len());
         println!("Response: {:?}", &response);
         assert_eq!(

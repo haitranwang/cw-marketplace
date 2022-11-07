@@ -8,7 +8,7 @@ use crate::{
 
 impl MarketplaceContract<'static> {
     pub fn query_listing(
-        self: Self,
+        self,
         deps: Deps,
         contract_address: Addr,
         token_id: String,
@@ -18,7 +18,7 @@ impl MarketplaceContract<'static> {
     }
 
     pub fn query_listings_by_contract_address(
-        self: Self,
+        self,
         deps: Deps,
         status: String,
         contract_address: Addr,
@@ -26,10 +26,7 @@ impl MarketplaceContract<'static> {
         limit: Option<u32>,
     ) -> StdResult<ListingsResponse> {
         let limit = limit.unwrap_or(30).min(30) as usize;
-        let start: Option<Bound<ListingKey>> = match start_after {
-            Some(token_id) => Some(Bound::exclusive(listing_key(&contract_address, &token_id))),
-            None => None,
-        };
+        let start: Option<Bound<ListingKey>> = start_after.map(|token_id| Bound::exclusive(listing_key(&contract_address, &token_id)));
         let listings = self
             .listings
             .idx
@@ -43,7 +40,7 @@ impl MarketplaceContract<'static> {
     }
 
     // returns all auction contracts, max is 30 but we expected less than that
-    pub fn query_auction_contracts(self: Self, deps: Deps) -> StdResult<Vec<Addr>> {
+    pub fn query_auction_contracts(self, deps: Deps) -> StdResult<Vec<Addr>> {
         let limit = 30;
         let auction_contracts = self
             .auction_contracts
@@ -55,17 +52,17 @@ impl MarketplaceContract<'static> {
     }
 
     pub fn query_validate_auction_config(
-        self: Self,
+        self,
         deps: Deps,
         contract_address: Addr,
-        code_id: u32,
-        auction_config: AuctionConfig,
+        _code_id: u32,
+        _auction_config: AuctionConfig,
     ) -> StdResult<bool> {
-        let auction_contract = self
+        let _auction_contract = self
             .auction_contracts
             .load(deps.storage, contract_address)?;
 
-        return Ok(true);
+        Ok(true)
 
         // send a message to the auction contract to validate the config
         // let msg = {};
