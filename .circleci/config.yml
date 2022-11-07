@@ -6,14 +6,6 @@ workflows:
       - contract_nft_store
       - lint
       - wasm-build
-  deploy:
-    jobs:
-      - build_and_upload_contracts:
-          filters:
-            tags:
-              only: /^v[0-9]+\.[0-9]+\.[0-9]+.*/
-            branches:
-              ignore: /.*/
 
 jobs:
   contract_nft_store:
