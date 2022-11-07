@@ -11,6 +11,9 @@ pub use cw721_base::{ContractError, InstantiateMsg, MintMsg, MinterResponse};
 
 use crate::msg::Cw2981QueryMsg;
 
+#[cfg(not(feature = "library"))]
+use cosmwasm_std::entry_point;
+
 // Version info for migration
 const CONTRACT_NAME: &str = "crates.io:cw2981-royalties";
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -52,49 +55,43 @@ pub type Cw2981Contract<'a> = Cw721Contract<'a, Extension, Empty, Empty, Cw2981Q
 pub type ExecuteMsg = cw721_base::ExecuteMsg<Extension, Empty>;
 pub type QueryMsg = cw721_base::QueryMsg<Cw2981QueryMsg>;
 
-#[cfg(not(feature = "library"))]
-pub mod entry {
-    use super::*;
+use cosmwasm_std::{Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult};
 
-    use cosmwasm_std::entry_point;
-    use cosmwasm_std::{Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult};
+#[cfg_attr(not(feature = "library"), entry_point)]
+pub fn instantiate(
+    mut deps: DepsMut,
+    env: Env,
+    info: MessageInfo,
+    msg: InstantiateMsg,
+) -> Result<Response, ContractError> {
+    let res = Cw2981Contract::default().instantiate(deps.branch(), env, info, msg)?;
+    // Explicitly set contract name and version, otherwise set to cw721-base info
+    set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)
+        .map_err(ContractError::Std)?;
+    Ok(res)
+}
 
-    #[entry_point]
-    pub fn instantiate(
-        mut deps: DepsMut,
-        env: Env,
-        info: MessageInfo,
-        msg: InstantiateMsg,
-    ) -> Result<Response, ContractError> {
-        let res = Cw2981Contract::default().instantiate(deps.branch(), env, info, msg)?;
-        // Explicitly set contract name and version, otherwise set to cw721-base info
-        set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)
-            .map_err(ContractError::Std)?;
-        Ok(res)
-    }
+#[cfg_attr(not(feature = "library"), entry_point)]
+pub fn execute(
+    deps: DepsMut,
+    env: Env,
+    info: MessageInfo,
+    msg: ExecuteMsg,
+) -> Result<Response, ContractError> {
+    Cw2981Contract::default().execute(deps, env, info, msg)
+}
 
-    #[entry_point]
-    pub fn execute(
-        deps: DepsMut,
-        env: Env,
-        info: MessageInfo,
-        msg: ExecuteMsg,
-    ) -> Result<Response, ContractError> {
-        Cw2981Contract::default().execute(deps, env, info, msg)
-    }
-
-    #[entry_point]
-    pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
-        match msg {
-            QueryMsg::Extension { msg } => match msg {
-                Cw2981QueryMsg::RoyaltyInfo {
-                    token_id,
-                    sale_price,
-                } => to_binary(&query_royalties_info(deps, token_id, sale_price)?),
-                Cw2981QueryMsg::CheckRoyalties {} => to_binary(&check_royalties(deps)?),
-            },
-            _ => Cw2981Contract::default().query(deps, env, msg),
-        }
+#[cfg_attr(not(feature = "library"), entry_point)]
+pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
+    match msg {
+        QueryMsg::Extension { msg } => match msg {
+            Cw2981QueryMsg::RoyaltyInfo {
+                token_id,
+                sale_price,
+            } => to_binary(&query_royalties_info(deps, token_id, sale_price)?),
+            Cw2981QueryMsg::CheckRoyalties {} => to_binary(&check_royalties(deps)?),
+        },
+        _ => Cw2981Contract::default().query(deps, env, msg),
     }
 }
 
@@ -121,7 +118,7 @@ mod tests {
             symbol: "SPACE".to_string(),
             minter: CREATOR.to_string(),
         };
-        entry::instantiate(deps.as_mut(), mock_env(), info.clone(), init_msg).unwrap();
+        instantiate(deps.as_mut(), mock_env(), info.clone(), init_msg).unwrap();
 
         let token_id = "Enterprise";
         let mint_msg = MintMsg {
@@ -135,7 +132,7 @@ mod tests {
             }),
         };
         let exec_msg = ExecuteMsg::Mint(mint_msg.clone());
-        entry::execute(deps.as_mut(), mock_env(), info, exec_msg).unwrap();
+        execute(deps.as_mut(), mock_env(), info, exec_msg).unwrap();
 
         let res = contract.nft_info(deps.as_ref(), token_id.into()).unwrap();
         assert_eq!(res.token_uri, mint_msg.token_uri);
@@ -153,7 +150,7 @@ mod tests {
             symbol: "SPACE".to_string(),
             minter: CREATOR.to_string(),
         };
-        entry::instantiate(deps.as_mut(), mock_env(), info.clone(), init_msg).unwrap();
+        instantiate(deps.as_mut(), mock_env(), info.clone(), init_msg).unwrap();
 
         let token_id = "Enterprise";
         let mint_msg = MintMsg {
@@ -167,7 +164,7 @@ mod tests {
             }),
         };
         let exec_msg = ExecuteMsg::Mint(mint_msg);
-        entry::execute(deps.as_mut(), mock_env(), info, exec_msg).unwrap();
+        execute(deps.as_mut(), mock_env(), info, exec_msg).unwrap();
 
         let expected = CheckRoyaltiesResponse {
             royalty_payments: true,
@@ -180,7 +177,7 @@ mod tests {
             msg: Cw2981QueryMsg::CheckRoyalties {},
         };
         let query_res: CheckRoyaltiesResponse =
-            from_binary(&entry::query(deps.as_ref(), mock_env(), query_msg).unwrap()).unwrap();
+            from_binary(&query(deps.as_ref(), mock_env(), query_msg).unwrap()).unwrap();
         assert_eq!(query_res, expected);
     }
 
@@ -194,7 +191,7 @@ mod tests {
             symbol: "SPACE".to_string(),
             minter: CREATOR.to_string(),
         };
-        entry::instantiate(deps.as_mut(), mock_env(), info.clone(), init_msg).unwrap();
+        instantiate(deps.as_mut(), mock_env(), info.clone(), init_msg).unwrap();
 
         let token_id = "Enterprise";
         let mint_msg = MintMsg {
@@ -210,7 +207,7 @@ mod tests {
             }),
         };
         let exec_msg = ExecuteMsg::Mint(mint_msg.clone());
-        entry::execute(deps.as_mut(), mock_env(), info.clone(), exec_msg).unwrap();
+        execute(deps.as_mut(), mock_env(), info.clone(), exec_msg).unwrap();
 
         let expected = RoyaltiesInfoResponse {
             address: mint_msg.owner,
@@ -228,7 +225,7 @@ mod tests {
             },
         };
         let query_res: RoyaltiesInfoResponse =
-            from_binary(&entry::query(deps.as_ref(), mock_env(), query_msg).unwrap()).unwrap();
+            from_binary(&query(deps.as_ref(), mock_env(), query_msg).unwrap()).unwrap();
         assert_eq!(query_res, expected);
 
         // check for rounding down
@@ -247,7 +244,7 @@ mod tests {
             }),
         };
         let voyager_exec_msg = ExecuteMsg::Mint(second_mint_msg.clone());
-        entry::execute(deps.as_mut(), mock_env(), info, voyager_exec_msg).unwrap();
+        execute(deps.as_mut(), mock_env(), info, voyager_exec_msg).unwrap();
 
         // 43 x 0.04 (i.e., 4%) should be 1.72
         // we expect this to be rounded down to 1
