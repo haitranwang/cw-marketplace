@@ -66,6 +66,27 @@ impl StoreContract<'static> {
             return Err(ContractError::Unauthorized {});
         }
 
+        // check if user is the owner of the token
+        let query_owner_msg = Cw721QueryMsg::OwnerOf {
+            token_id: token_id.clone(),
+            include_expired: Some(false),
+        };
+        let owner_response: StdResult<cw721::OwnerOfResponse> =
+            deps.querier.query(&QueryRequest::Wasm(WasmQuery::Smart {
+                contract_addr: contract_address.to_string(),
+                msg: to_binary(&query_owner_msg)?,
+            }));
+        match owner_response {
+            Ok(owner) => {
+                if owner.owner != info.sender {
+                    return Err(ContractError::Unauthorized {});
+                }
+            }
+            Err(_) => {
+                return Err(ContractError::Unauthorized {});
+            }
+        }
+
         // check that user approves this contract to manage this token
         // for now, we require never expired approval
         let query_approval_msg = Cw721QueryMsg::Approval {

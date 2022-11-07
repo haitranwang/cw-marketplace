@@ -13,7 +13,7 @@ mod tests {
     };
     use cw2981_royalties::msg::{Cw2981QueryMsg, RoyaltiesInfoResponse};
     use cw2981_royalties::{ExecuteMsg as Cw2981ExecuteMsg, QueryMsg as Cw721QueryMsg};
-    use cw721::{Approval, ApprovalResponse};
+    use cw721::{Approval, ApprovalResponse, OwnerOfResponse};
     use cw_utils::Expiration;
 
     const MOCK_CW2981_ADDR: &str = "cw2981_addr";
@@ -35,6 +35,7 @@ mod tests {
                                     Cw2981QueryMsg::RoyaltyInfo { token_id, .. } => {
                                         match token_id.as_str() {
                                             "1" => {
+                                                // owner is not creator, royalty is 10
                                                 let royalty_info = RoyaltiesInfoResponse {
                                                     address: Addr::unchecked("creator").to_string(),
                                                     royalty_amount: 10u128.into(),
@@ -45,6 +46,7 @@ mod tests {
                                                 cosmwasm_std::SystemResult::Ok(result)
                                             }
                                             "2" => {
+                                                // owner is not creator, royalty is 0
                                                 let royalty_info = RoyaltiesInfoResponse {
                                                     address: Addr::unchecked("creator").to_string(),
                                                     royalty_amount: 0u128.into(),
@@ -55,6 +57,7 @@ mod tests {
                                                 cosmwasm_std::SystemResult::Ok(result)
                                             }
                                             "3" => {
+                                                // owner is creator, royalty is 10
                                                 let royalty_info = RoyaltiesInfoResponse {
                                                     address: Addr::unchecked("owner").to_string(),
                                                     royalty_amount: 10u128.into(),
@@ -85,13 +88,41 @@ mod tests {
                                 let result = ContractResult::Ok(
                                     to_binary(&ApprovalResponse {
                                         approval: Approval {
-                                            spender: "creator".to_string(),
+                                            spender: "owner".to_string(),
                                             expires: Expiration::Never {},
                                         },
                                     })
                                     .unwrap(),
                                 );
                                 cosmwasm_std::SystemResult::Ok(result)
+                            }
+                            Cw721QueryMsg::OwnerOf {
+                                token_id,
+                                include_expired: _,
+                            } => {
+                                // return owner by token_id
+                                match token_id.as_str() {
+                                    "0" => {
+                                        let result = ContractResult::Ok(
+                                            to_binary(&OwnerOfResponse {
+                                                owner: "another_owner".to_string(),
+                                                approvals: vec![],
+                                            })
+                                            .unwrap(),
+                                        );
+                                        cosmwasm_std::SystemResult::Ok(result)
+                                    }
+                                    _ => {
+                                        let result = ContractResult::Ok(
+                                            to_binary(&OwnerOfResponse {
+                                                owner: "owner".to_string(),
+                                                approvals: vec![],
+                                            })
+                                            .unwrap(),
+                                        );
+                                        cosmwasm_std::SystemResult::Ok(result)
+                                    }
+                                }
                             }
                             _ => {
                                 let result = ContractResult::Err("Not Found".to_string());
@@ -159,7 +190,7 @@ mod tests {
     fn owner_can_create_listing() {
         let mut deps = mock_deps();
 
-        for i in 0..20 {
+        for i in 1..21 {
             create_listing(
                 deps.as_mut(),
                 "owner",
@@ -195,6 +226,22 @@ mod tests {
     }
 
     #[test]
+    fn cannot_create_listing_nft_not_owned() {
+        let mut deps = mock_deps();
+
+        let res = create_listing(
+            deps.as_mut(),
+            "owner",
+            Addr::unchecked(MOCK_CW2981_ADDR),
+            "0",
+        );
+        match res {
+            Err(ContractError::Unauthorized {}) => {}
+            _ => panic!("Unexpected error: {:?}", res),
+        }
+    }
+
+    #[test]
     fn other_cannot_create_listing() {
         let mut deps = mock_deps();
 
@@ -212,7 +259,7 @@ mod tests {
     fn owner_cancel_listing() {
         let mut deps = mock_deps();
 
-        for i in 0..20 {
+        for i in 1..21 {
             create_listing(
                 deps.as_mut(),
                 "owner",
