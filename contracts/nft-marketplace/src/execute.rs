@@ -214,7 +214,7 @@ impl MarketplaceContract<'static> {
 
                 if end_time.is_some() && end_time.unwrap().is_expired(&env.block) {
                     return Err(ContractError::CustomError {
-                        val: ("Auction ended".to_string()),
+                        val: format!("Auction ended: {} {}", end_time.unwrap(), env.block.time),
                     });
                 }
                 // check if enough funds
@@ -266,9 +266,9 @@ impl MarketplaceContract<'static> {
 
                 let config = self.config.load(deps.storage)?;
 
-                // there is no royalty, creator is the owner, or royalty amount is 0
+                // there is no royalty, creator is the seller, or royalty amount is 0
                 if creator == None
-                    || *creator.as_ref().unwrap() == config.owner
+                    || *creator.as_ref().unwrap() == listing.seller
                     || royalty_amount == None
                     || royalty_amount.unwrap().is_zero()
                 {
