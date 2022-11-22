@@ -47,10 +47,8 @@ cw2 = "0.15.0"
 schemars = "0.8.8"
 serde = { version = "1.0.137", default-features = false, features = ["derive"] }
 thiserror = { version = "1.0.31" }
-cw721 = { path = "../../packages/cw721", version = "0.15.0" }
-cw721-base = { path = "../cw721-base", version = "0.15.0", features = [
-  "library",
-] }
+cw721 = "0.15.0"
+cw721-base = { version = "0.15.0", features = ["library"] }
 cw2981-royalties = { path = "../cw2981-royalties", version = "0.15.0", features = [
   "library",
 ] }
