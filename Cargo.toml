@@ -1,14 +1,13 @@
 [workspace]
 members = ["packages/*", "contracts/*"]
 
-[profile.release.package.cw-marketplace]
-codegen-units = 1
-incremental = false
-
 [profile.release]
-rpath = false
-lto = true
-overflow-checks = true
 opt-level = 3
 debug = false
+rpath = false
+lto = true
 debug-assertions = false
+codegen-units = 1
+panic = 'abort'
+incremental = false
+overflow-checks = true

@@ -258,6 +258,12 @@ impl StoreContract<'static> {
             };
             res = res.add_message(transfer_token_msg);
         } else {
+            if royalty_amount.unwrap() > price.amount {
+                return Err(ContractError::CustomError {
+                    val: (format!("Royalty amount is greater than price: {} {}",royalty_amount.unwrap(), price)),
+                });
+            }
+
             // transfer royalty to minter
             let transfer_token_minter_msg = BankMsg::Send {
                 to_address: creator.unwrap().to_string(),
