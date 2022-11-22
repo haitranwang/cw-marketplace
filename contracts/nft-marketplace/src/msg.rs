@@ -1,8 +1,9 @@
 use cosmwasm_std::Addr;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use cosmwasm_schema::QueryResponses;
 
-use crate::state::{AuctionConfig, AuctionContract, Listing};
+use crate::state::{AuctionConfig, AuctionContract, Listing, Config};
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct InstantiateMsg {
@@ -40,23 +41,29 @@ pub enum ExecuteMsg {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
+#[derive(QueryResponses)]
 pub enum QueryMsg {
     // list config of contract
+    #[returns(Config)]
     Config {},
     // get listing by contract_address
+    #[returns(ListingsResponse)]
     ListingsByContractAddress {
         contract_address: String,
         start_after: Option<String>,
         limit: Option<u32>,
     },
     // get listing by contract_address and token_id
+    #[returns(Listing)]
     Listing {
         contract_address: String,
         token_id: String,
     },
     // get list of auction contracts
+    #[returns(Vec<Addr>)]
     AuctionContracts {},
     // validate auction config
+    #[returns(bool)]
     ValidateAuctionConfig {
         contract_address: String,
         code_id: u32,
