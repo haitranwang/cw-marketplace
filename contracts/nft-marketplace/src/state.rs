@@ -1,10 +1,9 @@
 use cosmwasm_std::{Addr, BlockInfo, Coin};
 use cw721::Expiration;
 use cw_storage_plus::{Index, IndexList, IndexedMap, Item, MultiIndex, UniqueIndex};
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use cosmwasm_schema::cw_serde;
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub enum AuctionConfig {
     FixedPrice {
         price: Coin,
@@ -17,7 +16,7 @@ pub enum AuctionConfig {
     },
 }
 
-#[derive(Serialize, Deserialize, Clone, PartialEq, Debug, JsonSchema)]
+#[cw_serde]
 pub enum ListingStatus {
     Ongoing {},
     Sold { buyer: Addr },
@@ -35,7 +34,7 @@ impl ListingStatus {
 
 pub type TokenId = String;
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct Listing {
     pub contract_address: Addr,        // contract contains the NFT
     pub token_id: String,              // id of the NFT
@@ -99,7 +98,7 @@ pub fn listings<'a>() -> IndexedMap<'a, ListingKey, Listing, ListingIndexes<'a>>
     IndexedMap::new("listings", indexes)
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct Config {
     pub owner: Addr,
 }
@@ -110,7 +109,7 @@ pub struct Config {
 // For example, if the new contract is a performance upgrade, it can accept the config
 // If the new contract is a breaking change or a bug fix, it can reject the config
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct AuctionContract {
     pub contract_address: Addr,
     pub code_id: u32,

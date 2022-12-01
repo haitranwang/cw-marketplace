@@ -1,17 +1,14 @@
 use cosmwasm_std::Addr;
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
-use cosmwasm_schema::QueryResponses;
+use cosmwasm_schema::{ QueryResponses, cw_serde };
 
 use crate::state::{AuctionConfig, AuctionContract, Listing, Config};
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct InstantiateMsg {
     pub owner: Addr,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-#[serde(rename_all = "snake_case")]
+#[cw_serde]
 pub enum ExecuteMsg {
     // List a NFT for sale
     ListNft {
@@ -39,8 +36,7 @@ pub enum ExecuteMsg {
     },
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-#[serde(rename_all = "snake_case")]
+#[cw_serde]
 #[derive(QueryResponses)]
 pub enum QueryMsg {
     // list config of contract
@@ -71,12 +67,12 @@ pub enum QueryMsg {
     },
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct ListingsResponse {
     pub listings: Vec<Listing>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct ValidateResponse {
     pub valid: bool,
 }
