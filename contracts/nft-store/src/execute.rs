@@ -6,8 +6,7 @@ use cosmwasm_std::{
 use cw2981_royalties::msg::RoyaltiesInfoResponse;
 use cw2981_royalties::ExecuteMsg as Cw2981ExecuteMsg;
 use cw2981_royalties::QueryMsg as Cw2981QueryMsg;
-use cw721::Cw721QueryMsg;
-use cw_utils::Expiration;
+use cw721::{Cw721QueryMsg, Expiration};
 
 use crate::state::AuctionContract;
 use crate::{
@@ -260,7 +259,11 @@ impl StoreContract<'static> {
         } else {
             if royalty_amount.unwrap() > price.amount {
                 return Err(ContractError::CustomError {
-                    val: (format!("Royalty amount is greater than price: {} {}",royalty_amount.unwrap(), price)),
+                    val: (format!(
+                        "Royalty amount is greater than price: {} {}",
+                        royalty_amount.unwrap(),
+                        price
+                    )),
                 });
             }
 

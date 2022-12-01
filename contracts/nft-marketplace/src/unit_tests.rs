@@ -13,8 +13,7 @@ mod tests {
     };
     use cw2981_royalties::msg::{Cw2981QueryMsg, RoyaltiesInfoResponse};
     use cw2981_royalties::{ExecuteMsg as Cw2981ExecuteMsg, QueryMsg as Cw721QueryMsg};
-    use cw721::{Approval, ApprovalResponse, OwnerOfResponse};
-    use cw_utils::Expiration;
+    use cw721::{Approval, ApprovalResponse, Expiration, OwnerOfResponse};
 
     const MOCK_CW2981_ADDR: &str = "cw2981_addr";
 

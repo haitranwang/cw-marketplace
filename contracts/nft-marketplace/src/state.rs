@@ -1,7 +1,7 @@
+use cosmwasm_schema::cw_serde;
 use cosmwasm_std::{Addr, BlockInfo, Coin};
 use cw721::Expiration;
 use cw_storage_plus::{Index, IndexList, IndexedMap, Item, MultiIndex, UniqueIndex};
-use cosmwasm_schema::cw_serde;
 
 #[cw_serde]
 pub enum AuctionConfig {
