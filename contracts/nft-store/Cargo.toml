@@ -29,19 +29,18 @@ optimize = """docker run --rm -v "$(pwd)":/code \
 """
 
 [dependencies]
-cosmwasm-std = "1.1.8"
-cosmwasm-storage = "1.1.8"
-cw-storage-plus = "1.0.0"
+cosmwasm-std = "1.1.9"
+cosmwasm-storage = "1.1.9"
+cw-storage-plus = "1.0.1"
 cw2 = "1.0.0"
-thiserror = { version = "1.0.31" }
+thiserror = { version = "1.0.37" }
 cw721 = "0.15.0"
 cw721-base = { version = "0.15.0", features = ["library"] }
-cw2981-royalties = { path = "../cw2981-royalties", version = "0.15.0", features = [
-  "library",
-] }
-serde_json = "1.0.85"
+cw2981-royalties = { path = "../cw2981-royalties", version = "0.15.0", features = ["library"]}
+serde_json = "1.0.89"
 cw-utils = "1.0.0"
-cosmwasm-schema = "1.1.8"
+cosmwasm-schema = "1.1.9"
+getrandom = {version = "0.2.7", default-features = false, features = ["js"]}
 
 [dev-dependencies]
 cw-multi-test = "0.16.1"

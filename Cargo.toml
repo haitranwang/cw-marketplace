@@ -1,5 +1,8 @@
 [workspace]
-members = ["packages/*", "contracts/*"]
+members = ["contracts/*"]
+
+[workspace.dependencies]
+getrandom = {version = "0.2.7", default-features = false, features = ["js"]}
 
 [profile.release]
 opt-level = 3

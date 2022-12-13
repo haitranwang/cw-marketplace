@@ -1,7 +1,7 @@
 use cosmwasm_schema::{cw_serde, QueryResponses};
 use cosmwasm_std::Addr;
 
-use crate::state::{AuctionConfig, AuctionContract, Config, Listing};
+use crate::state::{AuctionConfig, AuctionContract, Listing};
 
 #[cw_serde]
 pub struct InstantiateMsg {
@@ -40,7 +40,7 @@ pub enum ExecuteMsg {
 #[derive(QueryResponses)]
 pub enum QueryMsg {
     // list config of contract
-    #[returns(Config)]
+    #[returns(crate::state::Config)]
     Config {},
     // get listing by contract_address
     #[returns(ListingsResponse)]
