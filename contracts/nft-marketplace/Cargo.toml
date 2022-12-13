@@ -34,8 +34,8 @@ cosmwasm-storage = "1.1.9"
 cw-storage-plus = "1.0.1"
 cw2 = "1.0.0"
 thiserror = { version = "1.0.37" }
-cw721 = "0.15.0"
-cw721-base = { version = "0.15.0", features = ["library"] }
+cw721 = "0.16.0"
+cw721-base = { version = "0.16.0", features = ["library"] }
 cw2981-royalties = { path = "../cw2981-royalties", version = "0.15.0", features = ["library",]}
 serde_json = "1.0.89"
 cw-utils = "1.0.0"
