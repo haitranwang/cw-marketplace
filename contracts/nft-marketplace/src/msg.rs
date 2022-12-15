@@ -1,7 +1,7 @@
 use cosmwasm_schema::{cw_serde, QueryResponses};
 use cosmwasm_std::Addr;
 
-use crate::state::{AuctionConfig, AuctionContract, Listing};
+use crate::{state::{AuctionConfig, AuctionContract, Listing}, order_state::OrderComponents};
 
 #[cw_serde]
 pub struct InstantiateMsg {
@@ -33,6 +33,16 @@ pub enum ExecuteMsg {
     // remove an auction contract
     RemoveAuctionContract {
         contract_address: String,
+    },
+
+    // Implement Odering style
+    // add new listing
+    NewListingOrder {
+        listing_nft: OrderComponents,
+    },
+    // add new offer
+    NewOfferOrder {
+        offer_nft: OrderComponents,
     },
 }
 

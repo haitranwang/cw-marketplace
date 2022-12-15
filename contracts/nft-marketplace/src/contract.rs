@@ -78,6 +78,14 @@ pub fn execute(
                 info,
                 api.addr_validate(&contract_address)?,
             ),
+
+        // Implement Odering style
+        ExecuteMsg::NewListingOrder { listing_nft } => {
+            contract().execute_new_listing_order(deps, _env, info, listing_nft)
+        },
+        ExecuteMsg::NewOfferOrder { offer_nft } => {
+            contract().execute_new_offer_order(deps, _env, info, offer_nft)
+        }
     }
 }
 

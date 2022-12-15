@@ -8,6 +8,10 @@ use cw2981_royalties::ExecuteMsg as Cw2981ExecuteMsg;
 use cw2981_royalties::QueryMsg as Cw2981QueryMsg;
 use cw721::{Cw721QueryMsg, Expiration};
 
+use crate::order_state::Asset;
+use crate::order_state::Nft;
+use crate::order_state::OrderComponents;
+use crate::order_state::OrderKey;
 use crate::state::AuctionContract;
 use crate::{
     state::{listing_key, AuctionConfig, Listing, ListingStatus, MarketplaceContract},
@@ -379,5 +383,57 @@ impl MarketplaceContract<'static> {
 
         // save config
         Ok(Response::new().add_attribute("method", "remove_auction_contract"))
+    }
+
+    // Implement ordering style
+
+    // function to add new listing nft using ordering style
+    // the 'offer' of listing_nft will contain the information of nft
+    // the 'consideration' of listing_nft will contain the information of price
+    pub fn execute_new_listing_order(
+        self,
+        deps: DepsMut,
+        env: Env,
+        info: MessageInfo,
+        listing_nft: OrderComponents,
+    ) -> Result<Response, ContractError> {
+
+
+        Ok(_)
+    }
+
+    // function to add new offer nft using ordering style
+    // the 'offer' of offer_nft will contain the information of price
+    // the 'consideration' of offer_nft will contain the information of nft
+    pub fn execute_new_offer_order(
+        self,
+        deps: DepsMut,
+        env: Env,
+        info: MessageInfo,
+        offer_nft: OrderComponents,
+    ) -> Result<Response, ContractError> {
+        // loop through all the ConsiderationItem in consideration
+        for consideration_item in offer_nft.consideration {
+            // match the item in consideration with the type of Asset
+            match consideration_item.item {
+                Asset::Nft {nft_address, token_id} => {
+                    // user is the offerer of offer_nft
+                    let user = offer_nft.offerer;
+
+                    // nft is combination of nft_address and token_id
+                    let nft = (nft_address, token_id);
+                    
+                    // generate the key of order from nft_address, token_id and offerer of offer_nft
+                    let order_key = (user, nft);
+
+                    
+                }
+                // ignore other types of asset
+                _ => {}
+            }
+        }
+        
+
+        Ok(_)
     }
 }
