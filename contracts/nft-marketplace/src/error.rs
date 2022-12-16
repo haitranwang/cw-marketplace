@@ -22,4 +22,23 @@ pub enum ContractError {
     CustomError { val: String },
     // Add any other custom errors you like here.
     // Look at https://docs.rs/thiserror/1.0.21/thiserror/ for details.
+
+    // Implement ordering style
+    #[error("Offer item must be a nft")]
+    OfferEmpty {},
+
+    #[error("Cannot offer your own NFT")]
+    CannotOfferOwnNFT {},
+
+    #[error("Nft not found")]
+    NftNotFound {},
+
+    #[error("You can offer by one token only")]
+    OfferByOneTokenOnly {},
+
+    #[error("Offer token type invalid")]
+    OfferTokenTypeInvalid {},
+
+    #[error("Offer token not found")]
+    AllowanceNotEnough {},
 }

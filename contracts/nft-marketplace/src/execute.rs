@@ -2,6 +2,8 @@ use cosmwasm_std::{
     to_binary, Addr, BankMsg, Coin, DepsMut, Env, MessageInfo, QueryRequest, Response, StdResult,
     Uint128, WasmMsg, WasmQuery,
 };
+use cw20::AllowanceResponse;
+use cw20::Cw20QueryMsg;
 // use cw2981_royalties::msg::{Cw2981QueryMsg, RoyaltiesInfoResponse};
 use cw2981_royalties::msg::RoyaltiesInfoResponse;
 use cw2981_royalties::ExecuteMsg as Cw2981ExecuteMsg;
@@ -9,9 +11,7 @@ use cw2981_royalties::QueryMsg as Cw2981QueryMsg;
 use cw721::{Cw721QueryMsg, Expiration};
 
 use crate::order_state::Asset;
-use crate::order_state::Nft;
 use crate::order_state::OrderComponents;
-use crate::order_state::OrderKey;
 use crate::state::AuctionContract;
 use crate::{
     state::{listing_key, AuctionConfig, Listing, ListingStatus, MarketplaceContract},
@@ -412,6 +412,46 @@ impl MarketplaceContract<'static> {
         info: MessageInfo,
         offer_nft: OrderComponents,
     ) -> Result<Response, ContractError> {
+        // ***********
+        // OFFER ITEMS
+        // ***********
+        // user can only offer by one token
+        if offer_nft.offer.len() != 1 {
+            return Err(ContractError::OfferByOneTokenOnly {});
+        }
+
+        // match the type of offer token
+        match offer_nft.offer[0].item {
+            Asset::Cw20 {token_address, amount} => {
+                // check that the allowance of the cw20 offer token is enough
+                // create message to query allowance
+                let allowance_msg = Cw20QueryMsg::Allowance {
+                    owner: info.sender.to_string(),
+                    spender: env.contract.address.to_string(),
+                };
+                
+                // query allowance
+                let allowance_response: AllowanceResponse = 
+                    deps.querier.query_wasm_smart(token_address, &allowance_msg).unwrap();
+
+                // check if the allowance is greater or equal the offer amount
+                if allowance_response.allowance < Uint128::from(amount) {
+                    return Err(ContractError::AllowanceNotEnough {});
+                }
+            }
+            _ => {
+                return Err(ContractError::OfferTokenTypeInvalid {});
+            }
+        }
+
+        // *******************
+        // CONSIDERATION ITEMS
+        // *******************
+        // check if the consideration_item is empty, then return error
+        if offer_nft.consideration.is_empty() {
+            return Err(ContractError::OfferEmpty {});
+        }
+
         // loop through all the ConsiderationItem in consideration
         for consideration_item in offer_nft.consideration {
             // match the item in consideration with the type of Asset
@@ -422,14 +462,43 @@ impl MarketplaceContract<'static> {
 
                     // nft is combination of nft_address and token_id
                     let nft = (nft_address, token_id);
-                    
+
+                    // check if user is the owner of the nft, then return error: "Cannot offer your own NFT"
+                    let query_owner_msg = Cw721QueryMsg::OwnerOf {
+                        token_id: token_id.clone(),
+                        include_expired: Some(false),
+                    };
+                    let owner_response: StdResult<cw721::OwnerOfResponse> =
+                        deps.querier.query(&QueryRequest::Wasm(WasmQuery::Smart {
+                            contract_addr: nft_address.to_string(),
+                            msg: to_binary(&query_owner_msg)?,
+                        }));
+                    match owner_response {
+                        Ok(owner) => {
+                            if owner.owner == info.sender {
+                                return Err(ContractError::CannotOfferOwnNFT {});
+                            }
+                        }
+                        Err(_) => {
+                            // return error: "Nft not found" if the query return error
+                            return Err(ContractError::NftNotFound {});
+                        }
+                    }
+
                     // generate the key of order from nft_address, token_id and offerer of offer_nft
                     let order_key = (user, nft);
 
-                    
+                    // we will override the order if it already exists
+                    let new_order = self.orders.update(
+                        deps.storage,
+                        order_key,
+                        |_old| -> Result<OrderComponents, ContractError> { Ok(offer_nft) },
+                    )?;
                 }
                 // ignore other types of asset
-                _ => {}
+                _ => {
+                    return Err(ContractError::OfferEmpty {});
+                }
             }
         }
         
