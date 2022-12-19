@@ -1,15 +1,22 @@
 use cosmwasm_schema::cw_serde;
-use cosmwasm_std::{Addr, BlockInfo, Coin};
+use cosmwasm_std::{Addr, BlockInfo};
+use cw20::Expiration;
 use cw_storage_plus::{MultiIndex, IndexList, Index, IndexedMap};
 
 pub type Nft = (Addr, String);
 pub type User = Addr;
 
 #[cw_serde]
+pub enum OrderType {
+    OFFER,
+    LISTING
+}
+
+#[cw_serde]
 pub enum Asset {
     Nft {
         nft_address: Addr,
-        token_id: String,
+        token_id: Option<String>,
     },
     Native {
         denom: String,
@@ -38,9 +45,22 @@ pub enum ItemType {
 pub struct OfferItem {
     pub item_type: ItemType,
     pub item: Asset,
-    pub identifier_or_criteria: String,
     pub start_amount: u128,
     pub end_amount: u128,
+}
+
+pub fn offer_item (
+    item_type: &ItemType,
+    item: &Asset,
+    start_amount: &u128,
+    end_amount: &u128
+) -> OfferItem {
+    OfferItem {
+        item_type: item_type.clone(),
+        item: item.clone(),
+        start_amount: start_amount.clone(),
+        end_amount: end_amount.clone(),
+    }
 }
 
 #[cw_serde]
@@ -52,18 +72,43 @@ pub struct ConsiderationItem {
     pub recipient: Addr,
 }
 
+pub fn consideration_item (
+    item_type: &ItemType,
+    item: &Asset,
+    start_amount: &u128,
+    end_amount: &u128,
+    recipient: &Addr
+) -> ConsiderationItem {
+    ConsiderationItem {
+        item_type: item_type.clone(),
+        item: item.clone(),
+        start_amount: start_amount.clone(),
+        end_amount: end_amount.clone(),
+        recipient: recipient.clone(),
+    }
+}
+
 // the OrderKey includes the address and id of NFT
 // !DO NOT change the order of the fields
 pub type OrderKey = (User, Nft);
 
+pub fn order_key(
+    user_address: &Addr, 
+    contract_address: &Addr, 
+    token_id: &String
+) -> OrderKey {
+    (user_address.clone(), (contract_address.clone(), token_id.clone()))
+}
+
 #[cw_serde]
 pub struct OrderComponents {
+    pub order_type: OrderType,
     pub order_id: OrderKey,
     pub offerer: User,
     pub offer: Vec<OfferItem>,
     pub consideration: Vec<ConsiderationItem>,
-    pub start_time: u128,
-    pub end_time: u128,
+    pub start_time: Option<Expiration>,
+    pub end_time: Option<Expiration>,
 }
 
 pub struct OrderIndexes<'a> {

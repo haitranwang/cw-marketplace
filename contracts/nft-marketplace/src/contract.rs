@@ -80,12 +80,34 @@ pub fn execute(
             ),
 
         // Implement Odering style
-        ExecuteMsg::NewListingOrder { listing_nft } => {
-            contract().execute_new_listing_order(deps, _env, info, listing_nft)
-        },
-        ExecuteMsg::NewOfferOrder { offer_nft } => {
-            contract().execute_new_offer_order(deps, _env, info, offer_nft)
-        }
+        ExecuteMsg::OfferNft {
+            contract_address,
+            token_id,
+            funds,
+            end_time,
+        } => contract()
+            .execute_offer_nft(
+                deps,
+                _env,
+                info,
+                api.addr_validate(&contract_address)?,
+                token_id,
+                funds,
+                end_time,
+            ),
+        ExecuteMsg::AcceptNftOffer {
+            offerer, 
+            contract_address, 
+            token_id 
+        } => contract()
+            .execute_accept_nft_offer(
+                deps,
+                _env,
+                info,
+                api.addr_validate(&offerer)?,
+                api.addr_validate(&contract_address)?,
+                token_id,
+            ),
     }
 }
 

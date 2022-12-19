@@ -39,6 +39,6 @@ pub enum ContractError {
     #[error("Offer token type invalid")]
     OfferTokenTypeInvalid {},
 
-    #[error("Offer token not found")]
-    AllowanceNotEnough {},
+    #[error("Offer token allowance insufficient")]
+    InsufficientAllowance {},
 }

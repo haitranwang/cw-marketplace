@@ -1,7 +1,8 @@
 use cosmwasm_schema::{cw_serde, QueryResponses};
-use cosmwasm_std::Addr;
+use cosmwasm_std::{Addr, Coin};
+use cw20::Expiration;
 
-use crate::{state::{AuctionConfig, AuctionContract, Listing}, order_state::OrderComponents};
+use crate::{state::{AuctionConfig, AuctionContract, Listing}, order_state::{OrderComponents, Asset}};
 
 #[cw_serde]
 pub struct InstantiateMsg {
@@ -36,13 +37,18 @@ pub enum ExecuteMsg {
     },
 
     // Implement Odering style
-    // add new listing
-    NewListingOrder {
-        listing_nft: OrderComponents,
+    // Offer a Nft
+    OfferNft {
+        contract_address: String,
+        token_id: Option<String>,
+        funds: Asset,
+        end_time: Expiration,
     },
-    // add new offer
-    NewOfferOrder {
-        offer_nft: OrderComponents,
+    // Accept a Nft offer
+    AcceptNftOffer {
+        offerer: String,
+        contract_address: String,
+        token_id: Option<String>,
     },
 }
 
