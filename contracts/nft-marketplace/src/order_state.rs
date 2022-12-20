@@ -1,5 +1,5 @@
 use cosmwasm_schema::cw_serde;
-use cosmwasm_std::{Addr, BlockInfo};
+use cosmwasm_std::Addr;
 use cw20::Expiration;
 use cw_storage_plus::{MultiIndex, IndexList, Index, IndexedMap};
 

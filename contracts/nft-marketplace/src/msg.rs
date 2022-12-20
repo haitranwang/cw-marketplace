@@ -1,8 +1,8 @@
 use cosmwasm_schema::{cw_serde, QueryResponses};
-use cosmwasm_std::{Addr, Coin};
+use cosmwasm_std::Addr;
 use cw20::Expiration;
 
-use crate::{state::{AuctionConfig, AuctionContract, Listing}, order_state::{OrderComponents, Asset}};
+use crate::{state::{AuctionConfig, AuctionContract, Listing}, order_state::Asset};
 
 #[cw_serde]
 pub struct InstantiateMsg {

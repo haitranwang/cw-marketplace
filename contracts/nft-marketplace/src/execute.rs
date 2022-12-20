@@ -3,6 +3,7 @@ use cosmwasm_std::{
     Uint128, WasmMsg, WasmQuery,
 };
 use cw20::AllowanceResponse;
+use cw20::Cw20ExecuteMsg;
 use cw20::Cw20QueryMsg;
 // use cw2981_royalties::msg::{Cw2981QueryMsg, RoyaltiesInfoResponse};
 use cw2981_royalties::msg::RoyaltiesInfoResponse;
@@ -11,9 +12,7 @@ use cw2981_royalties::QueryMsg as Cw2981QueryMsg;
 use cw721::{Cw721QueryMsg, Expiration};
 
 use crate::order_state::Asset;
-use crate::order_state::ConsiderationItem;
 use crate::order_state::ItemType;
-use crate::order_state::OfferItem;
 use crate::order_state::OrderComponents;
 use crate::order_state::OrderType;
 use crate::order_state::consideration_item;
@@ -523,7 +522,7 @@ impl MarketplaceContract<'static> {
     // function to accept offer nft using ordering style
     pub fn execute_accept_nft_offer(
         self,
-        _deps: DepsMut,
+        deps: DepsMut,
         env: Env,
         info: MessageInfo,
         offerer: Addr,
@@ -531,13 +530,13 @@ impl MarketplaceContract<'static> {
         token_id: Option<String>,
     ) -> Result<Response, ContractError> {
         match token_id {
-            // match if the token_id is exist, then this order is offer for a specific nft
+            // if the token_id is exist, then this order is offer for a specific nft
             Some(token_id) => {
                 // generate order key for order components based on user address, contract address and token id
                 let order_key = order_key(&offerer, &contract_address, &token_id);
 
                 // get order components
-                let order_components = self.orders.load(_deps.storage, order_key.clone())?;
+                let order_components = self.orders.load(deps.storage, order_key.clone())?;
 
                 // if order is not offer type, then return error
                 if order_components.order_type != OrderType::OFFER {
@@ -553,25 +552,87 @@ impl MarketplaceContract<'static> {
                     });
                 }
 
-                // if the consideration item is empty, then return error
-                if order_components.consideration.is_empty() {
-                    return Err(ContractError::CustomError {
-                        val: ("Consideration is empty".to_string()),
-                    });
-                }
-
                 match &order_components.consideration[0].item {
                     // match if the consideration item is Nft
                     Asset::Nft { nft_address, token_id } => {
-                        // prepare 
+                        // prepare the cw721 owner query msg
+                        let query_owner_msg = Cw721QueryMsg::OwnerOf {
+                            token_id: token_id.clone().unwrap(),
+                            include_expired: Some(false),
+                        };
 
+                        // query the owner of the nft
+                        let owner_response: StdResult<cw721::OwnerOfResponse> =
+                            deps.querier.query(&QueryRequest::Wasm(WasmQuery::Smart {
+                                contract_addr: contract_address.to_string(),
+                                msg: to_binary(&query_owner_msg)?,
+                            }));
+                        
                         // if the nft is not belong to the info.sender, then return error
-
-                        if nft_address != info.sender {
-                            return Err(ContractError::CustomError {
-                                val: ("NFT is not belong to the sender".to_string()),
-                            });
+                        match owner_response {
+                            Ok(owner) => {
+                                if owner.owner != info.sender {
+                                    return Err(ContractError::Unauthorized {});
+                                }
+                            }
+                            Err(_) => {
+                                return Err(ContractError::Unauthorized {});
+                            }
                         }
+
+                        // ***********************
+                        // TRANSFER CW20 TO SENDER
+                        // ***********************
+                        // execute cw20 transfer msg from offerer to info.sender
+                        match &order_components.offer[0].item {
+                            Asset::Cw20 { token_address: _, amount: _ } => {
+                                self.payment_with_royalty(
+                                    deps,
+                                    info,
+                                    nft_address.clone(),
+                                    token_id.as_ref().unwrap().clone(),
+                                    order_components.offer[0].item.clone(),
+                                    offerer,
+                                )?;
+                            }
+                            _ => {
+                                return Err(ContractError::CustomError {
+                                    val: ("Invalid Offer funds".to_string()),
+                                });
+                            }
+                        }
+                        
+                        // match &order_components.offer[0].item {
+                        //     Asset::Cw20 { token_address, amount } => {
+                        //         let _transfer_response = WasmMsg::Execute {
+                        //             contract_addr: token_address.clone().to_string(),
+                        //             msg: to_binary(&Cw20ExecuteMsg::TransferFrom {
+                        //                 owner: offerer.clone().to_string(),
+                        //                 recipient: info.sender.to_string(),
+                        //                 amount: Uint128::from(amount.clone()),
+                        //             })?,
+                        //             funds: vec![],
+                        //         };
+                        //     }
+                        //     _ => {
+                        //         return Err(ContractError::CustomError {
+                        //             val: ("Invalid Offer funds".to_string()),
+                        //         });
+                        //     }
+                        // }
+
+                        // ***********************
+                        // TRANSFER NFT TO OFFERER
+                        // ***********************
+                        // message to transfer nft to offerer
+                        let _transfer_nft_msg = WasmMsg::Execute {
+                            contract_addr: nft_address.clone().to_string(),
+                            msg: to_binary(&Cw2981ExecuteMsg::TransferNft {
+                                recipient: order_components.offerer.clone().to_string(),
+                                token_id: token_id.clone().unwrap(),
+                            })?,
+                            funds: vec![],
+                        };
 
                         Ok(Response::new().add_attribute("method", "execute_accept_nft_offer"))
                     }
@@ -591,5 +652,144 @@ impl MarketplaceContract<'static> {
                 });
             }
         }
+    }
+
+    // function to process payment transfer with royalty
+    fn payment_with_royalty(
+        &self,
+        deps: DepsMut,
+        info: MessageInfo,
+        nft_contract_address: Addr,
+        nft_id: String,
+        token: Asset,
+        receipient: Addr,
+    ) -> Result<Response, ContractError>{
+        // Extract information from token
+        let (is_native, token_info, amount) = match token {
+            Asset::Cw20 { token_address, amount } => {
+                (false, token_address.to_string(), Uint128::from(amount))
+            }
+            Asset::Native { denom, amount } => {
+                (true, denom, Uint128::from(amount))
+            }
+            _ => {
+                return Err(ContractError::CustomError {
+                    val: ("Invalid payment method".to_string()),
+                });
+            }
+        };
+
+        // get cw2981 royalties info
+        let royalty_query_msg = Cw2981QueryMsg::Extension {
+            msg: cw2981_royalties::msg::Cw2981QueryMsg::RoyaltyInfo {
+                token_id: nft_id.clone(),
+                sale_price: Uint128::from(amount.clone())
+            },
+        };
+
+        let royalty_info_rsp: Result<RoyaltiesInfoResponse, cosmwasm_std::StdError> =
+            deps.querier.query(&QueryRequest::Wasm(WasmQuery::Smart {
+                contract_addr: nft_contract_address.to_string(),
+                msg: to_binary(&royalty_query_msg)?,
+            }));
+
+        let (creator, royalty_amount): (Option<Addr>, Option<Uint128>) =
+            match royalty_info_rsp {
+                Ok(RoyaltiesInfoResponse {
+                    address,
+                    royalty_amount,
+                }) => {
+                    if address.is_empty() || royalty_amount == Uint128::zero() {
+                        (None, None)
+                    } else {
+                        (
+                            Some(deps.api.addr_validate(&address)?),
+                            Some(royalty_amount),
+                        )
+                    }
+                }
+                Err(_) => (None, None),
+            };
+
+        // there is no royalty, creator is the receipient, or royalty amount is 0
+        if creator == None
+            || *creator.as_ref().unwrap() == receipient
+            || royalty_amount == None
+            || royalty_amount.unwrap().is_zero()
+        {
+            match &is_native {
+                false => {
+                    // execute cw20 transfer msg from info.sender to receipient
+                    let _transfer_response = WasmMsg::Execute {
+                        contract_addr: deps.api.addr_validate(&token_info).unwrap().to_string(),
+                        msg: to_binary(&Cw20ExecuteMsg::TransferFrom {
+                            owner: info.sender.to_string(),
+                            recipient: receipient.to_string(),
+                            amount: amount.clone(),
+                        })?,
+                        funds: vec![],
+                    };
+                }
+                true => {
+                    // transfer all funds to receipient
+                    let _transfer_token_msg = BankMsg::Send {
+                        to_address: receipient.to_string(),
+                        amount: vec![Coin {
+                            denom: token_info.clone(),
+                            amount: amount.clone(),
+                        }],
+                    };
+                }
+            }
+        } else {
+            match &is_native {
+                false => {
+                    // execute cw20 transfer transfer royalty to creator
+                    let _transfer_response = WasmMsg::Execute {
+                        contract_addr: deps.api.addr_validate(&token_info).unwrap().to_string(),
+                        msg: to_binary(&Cw20ExecuteMsg::TransferFrom {
+                            owner: info.sender.to_string(),
+                            recipient: creator.unwrap().to_string(),
+                            amount: royalty_amount.clone().unwrap(),
+                        })?,
+                        funds: vec![],
+                    };
+
+                    // execute cw20 transfer remaining funds to receipient
+                    let _transfer_response = WasmMsg::Execute {
+                        contract_addr: deps.api.addr_validate(&token_info).unwrap().to_string(),
+                        msg: to_binary(&Cw20ExecuteMsg::TransferFrom {
+                            owner: info.sender.to_string(),
+                            recipient: receipient.to_string(),
+                            amount: amount - royalty_amount.unwrap(),
+                        })?,
+                        funds: vec![],
+                    };
+                }
+                true => {
+                    // transfer royalty to creator
+                    let _transfer_token_minter_msg = BankMsg::Send {
+                        to_address: creator.unwrap().to_string(),
+                        amount: vec![Coin {
+                            denom: token_info.clone(),
+                            amount: royalty_amount.unwrap(),
+                        }],
+                    };
+
+                    // transfer remaining funds to receipient
+                    let _transfer_token_seller_msg = BankMsg::Send {
+                        to_address: receipient.to_string(),
+                        amount: vec![Coin {
+                            denom: token_info.clone(),
+                            amount: amount - royalty_amount.unwrap(),
+                        }],
+                    };
+                }
+            }
+
+        }
+
+
+        Ok(Response::new().add_attribute("method", "payment_with_royalty"))
     }
 }
