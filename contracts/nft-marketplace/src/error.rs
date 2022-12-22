@@ -41,4 +41,10 @@ pub enum ContractError {
 
     #[error("Offer token allowance insufficient")]
     InsufficientAllowance {},
+
+    #[error("Offer token balance insufficient")]
+    InsufficientBalance {},
+
+    #[error("Invalid end time")]
+    InvalidEndTime {},
 }
