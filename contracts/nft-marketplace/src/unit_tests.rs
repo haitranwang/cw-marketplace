@@ -5,15 +5,15 @@ mod tests {
     use crate::order_state::Asset;
     use crate::state::{contract, AuctionConfig, Config, ListingStatus};
     use crate::ContractError;
+    use crate::integration_tests::env::{ instantiate_contracts, USER_1, ADMIN };
 
-    use cosmwasm_schema::schemars::_private::NoSerialize;
     use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info, MockApi, MockQuerier};
     use cosmwasm_std::{
         coins, from_binary, to_binary, Addr, BankMsg, Coin, ContractResult, CosmosMsg, DepsMut,
         MemoryStorage, OwnedDeps, Response, StdError, SubMsg, Timestamp, Uint128, WasmMsg,
         WasmQuery,
     };
-    use cw2981_royalties::msg::{Cw2981QueryMsg, RoyaltiesInfoResponse};
+    use cw2981_royalties::msg::{Cw2981QueryMsg, RoyaltiesInfoResponse}; 
     use cw2981_royalties::{ExecuteMsg as Cw2981ExecuteMsg, QueryMsg as Cw721QueryMsg};
     use cw721::{Approval, ApprovalResponse, Expiration, OwnerOfResponse};
 
@@ -1089,6 +1089,10 @@ mod tests {
     
     mod accept_offer {
         use super::*;
+        use cw2981_royalties::{MintMsg, Metadata};
+        use cw721_base::msg::ExecuteMsg as Cw721ExecuteMsg;
+        use cw_multi_test::Executor;
+        use cw20_base::msg::ExecuteMsg as Cw20ExecuteMsg;
 
         // owner can accept offer
         #[test]
@@ -1121,7 +1125,86 @@ mod tests {
                 Some(MOCK_OFFER_NFT_TOKEN_ID_1.to_string()),
             );
             assert!(res.is_ok());
-        } 
+        }
+
+        // owner can accept offer
+        #[test]
+        fn owner_can_accept_offer_new() {
+            // get integration test app and contracts
+            let (mut app, contracts) = instantiate_contracts();
+            let cw20_address = contracts[0].contract_addr.clone();
+            let cw2981_address = contracts[1].contract_addr.clone();
+            let marketplace_address = contracts[2].contract_addr.clone();
+
+            // prepare mint cw2981 message to USER_1
+            let mint_msg: Cw721ExecuteMsg<Metadata, Metadata> = Cw721ExecuteMsg::Mint(MintMsg {
+                token_id: MOCK_OFFER_NFT_TOKEN_ID_1.to_string(),
+                owner: USER_1.to_string(),
+                token_uri: Some("https://ipfs.io/ipfs/Qme7ss3ARVgxv6rXqVPiikMJ8u2NLgmgszg13pYrDKEoiu".to_string()),
+                extension: Metadata {
+                    image: None,
+                    image_data: None,
+                    external_url: None,
+                    description: None,
+                    name: None,
+                    attributes: None,
+                    background_color: None,
+                    animation_url: None,
+                    youtube_url: None,
+                    royalty_percentage: Some(10),
+                    royalty_payment_address: Some(USER_1.to_string()),
+                },
+            });
+
+            // mint cw2981 token to USER_1
+            let res = app.execute_contract(
+                Addr::unchecked(ADMIN),
+                Addr::unchecked(cw2981_address.clone()),
+                &mint_msg,
+                &[]
+            );
+            assert!(res.is_ok());
+
+            // prepare increase allowance message to marketplace
+            let increase_allowance_msg = Cw20ExecuteMsg::IncreaseAllowance {
+                spender: marketplace_address.clone(),
+                amount: Uint128::from(10000001u128),
+                expires: None,
+            };
+
+            // increase allowance for marketplace
+            let res = app.execute_contract(
+                Addr::unchecked(ADMIN),
+                Addr::unchecked(cw20_address.clone()),
+                &increase_allowance_msg,
+                &[]
+            );
+            assert!(res.is_ok());
+
+            // offerer creates offer
+            // prepare offer nft message
+            let offer_nft_msg = ExecuteMsg::OfferNft {
+                contract_address: cw2981_address.clone(),
+                token_id: Some(MOCK_OFFER_NFT_TOKEN_ID_1.to_string()),
+                funds: Asset::Cw20 { 
+                    token_address: Addr::unchecked(cw20_address), 
+                    amount: 10000000, 
+                },
+                end_time: Expiration::AtTime(app.block_info().time.plus_seconds(1000)),
+            };
+
+            // offerer creates offer
+            let res = app.execute_contract(
+                Addr::unchecked(ADMIN),
+                Addr::unchecked(marketplace_address.clone()),
+                &offer_nft_msg,
+                &[]
+            );
+
+            println!("res: {:?}", res);
+            assert!(res.is_ok());
+
+        }
     }
 
 }
