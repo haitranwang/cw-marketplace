@@ -29,6 +29,28 @@ pub enum Asset {
 }
 
 #[cw_serde]
+pub enum PaymentAsset {
+    Native {
+        denom: String,
+        amount: u128,
+    },
+    Cw20 {
+        token_address: Addr,
+        amount: u128,
+    },
+}
+
+impl From<Asset> for PaymentAsset {
+    fn from(asset: Asset) -> Self {
+        match asset {
+            Asset::Native { denom, amount } => PaymentAsset::Native { denom, amount },
+            Asset::Cw20 { token_address, amount } => PaymentAsset::Cw20 { token_address, amount },
+            _ => panic!("Asset is not a payment asset"),
+        }
+    }
+}
+
+#[cw_serde]
 pub enum Side {
     OFFER,
     CONSIDERATION

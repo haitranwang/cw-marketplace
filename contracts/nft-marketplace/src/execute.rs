@@ -1,11 +1,11 @@
 use cosmwasm_std::{
     to_binary, Addr, BankMsg, Coin, DepsMut, Env, MessageInfo, QueryRequest, Response, StdResult,
-    Uint128, WasmMsg, WasmQuery,
+    Uint128, WasmMsg, WasmQuery, CosmosMsg,
 };
 use cw20::{ AllowanceResponse, Cw20ExecuteMsg, Cw20QueryMsg, BalanceResponse };
 use cw2981_royalties::{msg::RoyaltiesInfoResponse, ExecuteMsg as Cw2981ExecuteMsg, QueryMsg as Cw2981QueryMsg};
 use cw721::{Cw721QueryMsg, Expiration};
-use crate::order_state::{Asset, ItemType, OrderComponents, OrderType, consideration_item, offer_item, order_key};
+use crate::order_state::{Asset, ItemType, OrderComponents, OrderType, consideration_item, offer_item, order_key, PaymentAsset};
 use crate::{
     state::{AuctionContract, listing_key, AuctionConfig, Listing, ListingStatus, MarketplaceContract},
     ContractError,
@@ -611,25 +611,35 @@ impl MarketplaceContract<'static> {
                                 return Err(ContractError::Unauthorized {});
                             }
                         }
+                        let mut res: Response<> = Response::new();
 
                         // ***********************
                         // TRANSFER CW20 TO SENDER
                         // ***********************
+                        // convert Asset to PaymentAsset
+                        let payment_item = PaymentAsset::from(order_components.offer[0].item.clone());
+
                         // execute cw20 transfer msg from offerer to info.sender
-                        match &order_components.offer[0].item {
-                            Asset::Cw20 { token_address: _, amount: _ } => {
-                                self.payment_with_royalty(
+                        match &payment_item {
+                            PaymentAsset::Cw20 { token_address: _, amount: _ } => {
+                                let payment_messages = self.payment_with_royalty(
                                     deps,
-                                    info,
+                                    info.clone(),
                                     nft_address.clone(),
                                     token_id.as_ref().unwrap().clone(),
-                                    order_components.offer[0].item.clone(),
+                                    payment_item.clone(),
                                     offerer,
-                                )?;
+                                    info.sender.clone(),
+                                );
+
+                                // loop through all payment messages and add item to response to execute
+                                for payment_message in payment_messages {
+                                    res = res.add_message(payment_message);
+                                }
                             }
                             _ => {
                                 return Err(ContractError::CustomError {
-                                    val: ("Invalid Offer funds".to_string()),
+                                    val: ("Invalid Offer funding type".to_string()),
                                 });
                             }
                         }
@@ -638,7 +648,7 @@ impl MarketplaceContract<'static> {
                         // TRANSFER NFT TO OFFERER
                         // ***********************
                         // message to transfer nft to offerer
-                        let _transfer_nft_msg = WasmMsg::Execute {
+                        let transfer_nft_msg = WasmMsg::Execute {
                             contract_addr: nft_address.clone().to_string(),
                             msg: to_binary(&Cw2981ExecuteMsg::TransferNft {
                                 recipient: order_components.offerer.clone().to_string(),
@@ -647,7 +657,13 @@ impl MarketplaceContract<'static> {
                             funds: vec![],
                         };
 
-                        Ok(Response::new().add_attribute("method", "execute_accept_nft_offer"))
+                        // add transfer nft message to response to execute
+                        res = res.add_message(transfer_nft_msg);
+
+                        res = res
+                            .add_attribute("method", "execute_accept_nft_offer");
+
+                        Ok(res)
                     }
                     // if the consideration item is not Nft, then return error
                     _ => {
@@ -674,21 +690,20 @@ impl MarketplaceContract<'static> {
         info: MessageInfo,
         nft_contract_address: Addr,
         nft_id: String,
-        token: Asset,
+        token: PaymentAsset,
+        sender: Addr,
         receipient: Addr,
-    ) -> Result<Response, ContractError>{
+    ) -> Vec<CosmosMsg>{
+        // create empty vector of CosmosMsg
+        let mut res_messages: Vec<CosmosMsg> = vec![];
+
         // Extract information from token
         let (is_native, token_info, amount) = match token {
-            Asset::Cw20 { token_address, amount } => {
+            PaymentAsset::Cw20 { token_address, amount } => {
                 (false, token_address.to_string(), Uint128::from(amount))
             }
-            Asset::Native { denom, amount } => {
+            PaymentAsset::Native { denom, amount } => {
                 (true, denom, Uint128::from(amount))
-            }
-            _ => {
-                return Err(ContractError::CustomError {
-                    val: ("Invalid Offer funds".to_string()),
-                });
             }
         };
 
@@ -703,7 +718,7 @@ impl MarketplaceContract<'static> {
         let royalty_info_rsp: Result<RoyaltiesInfoResponse, cosmwasm_std::StdError> =
             deps.querier.query(&QueryRequest::Wasm(WasmQuery::Smart {
                 contract_addr: nft_contract_address.to_string(),
-                msg: to_binary(&royalty_query_msg)?,
+                msg: to_binary(&royalty_query_msg).unwrap(),
             }));
 
         let (creator, royalty_amount): (Option<Addr>, Option<Uint128>) =
@@ -716,15 +731,13 @@ impl MarketplaceContract<'static> {
                         (None, None)
                     } else {
                         (
-                            Some(deps.api.addr_validate(&address)?),
+                            Some(deps.api.addr_validate(&address).unwrap()),
                             Some(royalty_amount),
                         )
                     }
                 }
                 Err(_) => (None, None),
             };
-
-        let mut res: Response<> = Response::new();
 
         // there is no royalty, creator is the receipient, or royalty amount is 0
         if creator == None
@@ -738,13 +751,13 @@ impl MarketplaceContract<'static> {
                     let transfer_response = WasmMsg::Execute {
                         contract_addr: deps.api.addr_validate(&token_info).unwrap().to_string(),
                         msg: to_binary(&Cw20ExecuteMsg::TransferFrom {
-                            owner: info.sender.to_string(),
+                            owner: sender.to_string(),
                             recipient: receipient.to_string(),
                             amount: amount.clone(),
-                        })?,
+                        }).unwrap(),
                         funds: vec![],
                     };
-                    res = res.add_message(transfer_response);
+                    res_messages.push(transfer_response.into());
                 }
                 true => {
                     // transfer all funds to receipient
@@ -755,7 +768,7 @@ impl MarketplaceContract<'static> {
                             amount: amount.clone(),
                         }],
                     };
-                    res = res.add_message(transfer_response);
+                    res_messages.push(transfer_response.into());
                 }
             }
         } else {
@@ -765,25 +778,25 @@ impl MarketplaceContract<'static> {
                     let transfer_token_creator_response = WasmMsg::Execute {
                         contract_addr: deps.api.addr_validate(&token_info).unwrap().to_string(),
                         msg: to_binary(&Cw20ExecuteMsg::TransferFrom {
-                            owner: info.sender.to_string(),
+                            owner: sender.to_string(),
                             recipient: creator.unwrap().to_string(),
                             amount: royalty_amount.clone().unwrap(),
-                        })?,
+                        }).unwrap(),
                         funds: vec![],
                     };
-                    res = res.add_message(transfer_token_creator_response);
+                    res_messages.push(transfer_token_creator_response.into());
 
                     // execute cw20 transfer remaining funds to receipient
                     let transfer_token_seller_msg = WasmMsg::Execute {
                         contract_addr: deps.api.addr_validate(&token_info).unwrap().to_string(),
                         msg: to_binary(&Cw20ExecuteMsg::TransferFrom {
-                            owner: info.sender.to_string(),
+                            owner: sender.to_string(),
                             recipient: receipient.to_string(),
                             amount: amount - royalty_amount.unwrap(),
-                        })?,
+                        }).unwrap(),
                         funds: vec![],
                     };
-                    res = res.add_message(transfer_token_seller_msg);
+                    res_messages.push(transfer_token_seller_msg.into());
                 }
                 true => {
                     // transfer royalty to creator
@@ -794,7 +807,7 @@ impl MarketplaceContract<'static> {
                             amount: royalty_amount.unwrap(),
                         }],
                     };
-                    res = res.add_message(transfer_token_creator_response);
+                    res_messages.push(transfer_token_creator_response.into());
 
                     // transfer remaining funds to receipient
                     let transfer_token_seller_msg = BankMsg::Send {
@@ -804,12 +817,12 @@ impl MarketplaceContract<'static> {
                             amount: amount - royalty_amount.unwrap(),
                         }],
                     };
-                    res = res.add_message(transfer_token_seller_msg);
+                    res_messages.push(transfer_token_seller_msg.into());
                 }
             }
 
         }
 
-        Ok(res)
+        return res_messages;
     }
 }

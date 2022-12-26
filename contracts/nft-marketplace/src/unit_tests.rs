@@ -1089,6 +1089,7 @@ mod tests {
     
     mod accept_offer {
         use super::*;
+        use cw20::{Cw20QueryMsg, BalanceResponse};
         use cw2981_royalties::{MintMsg, Metadata};
         use cw721_base::msg::ExecuteMsg as Cw721ExecuteMsg;
         use cw_multi_test::Executor;
@@ -1187,7 +1188,7 @@ mod tests {
                 contract_address: cw2981_address.clone(),
                 token_id: Some(MOCK_OFFER_NFT_TOKEN_ID_1.to_string()),
                 funds: Asset::Cw20 { 
-                    token_address: Addr::unchecked(cw20_address), 
+                    token_address: Addr::unchecked(cw20_address.clone()), 
                     amount: 10000000, 
                 },
                 end_time: Expiration::AtTime(app.block_info().time.plus_seconds(1000)),
@@ -1200,10 +1201,71 @@ mod tests {
                 &offer_nft_msg,
                 &[]
             );
-
-            println!("res: {:?}", res);
             assert!(res.is_ok());
 
+            // check the owner of the token
+            let res: cw721::OwnerOfResponse = app.wrap().query_wasm_smart(
+                Addr::unchecked(cw2981_address.clone()),
+                &Cw721QueryMsg::OwnerOf {
+                    token_id: MOCK_OFFER_NFT_TOKEN_ID_1.to_string(),
+                    include_expired: None,
+                }
+            ).unwrap();
+            assert_eq!(res.owner, USER_1.to_string());
+
+            // *******************
+            // OWNER ACCEPTS OFFER
+            // *******************
+            // USER_1 must approve marketplace to transfer nft token
+            // prepare approve message
+            let approve_msg: Cw721ExecuteMsg<Metadata, Metadata> = Cw721ExecuteMsg::Approve {
+                spender: marketplace_address.clone(),
+                token_id: MOCK_OFFER_NFT_TOKEN_ID_1.to_string(),
+                expires: None,
+            };
+
+            // USER_1 approves marketplace to transfer nft token
+            let res = app.execute_contract(
+                Addr::unchecked(USER_1),
+                Addr::unchecked(cw2981_address.clone()),
+                &approve_msg,
+                &[]
+            );
+            assert!(res.is_ok());
+
+            // prepare accept offer message
+            let accept_offer_msg = ExecuteMsg::AcceptNftOffer {
+                offerer: ADMIN.to_string(),
+                contract_address: cw2981_address.clone(),
+                token_id: Some(MOCK_OFFER_NFT_TOKEN_ID_1.to_string()),
+            };
+
+            // owner accepts offer
+            let res = app.execute_contract(
+                Addr::unchecked(USER_1),
+                Addr::unchecked(marketplace_address.clone()),
+                &accept_offer_msg,
+                &[]
+            );
+            assert!(res.is_ok());
+
+            // check the owner of the token
+            let res: cw721::OwnerOfResponse = app.wrap().query_wasm_smart(
+                Addr::unchecked(cw2981_address.clone()),
+                &Cw721QueryMsg::OwnerOf {
+                    token_id: MOCK_OFFER_NFT_TOKEN_ID_1.to_string(),
+                    include_expired: None,
+                }
+            ).unwrap();
+            assert_eq!(res.owner, ADMIN.to_string());
+
+            // check the balance of the offerer
+            let res: BalanceResponse = app.wrap().query_wasm_smart(
+                Addr::unchecked(cw20_address.clone()),
+                &Cw20QueryMsg::Balance { address: USER_1.to_string() }
+            ).unwrap();
+
+            assert_eq!(res.balance, Uint128::from(10000000u128));
         }
     }
 
