@@ -3,12 +3,12 @@ use cosmwasm_std::entry_point;
 use cosmwasm_std::{Binary, Deps, DepsMut, Env, MessageInfo, Response, StdError, StdResult, Uint128, attr, BankMsg, Coin};
 
 use cw2::set_contract_version;
-use cw20_base::contract::{create_accounts, query as cw20_query, execute_mint, execute_burn, execute_update_minter};
+use cw20_base::contract::{create_accounts, query as cw20_query, execute_update_minter};
 use cw20_base::msg::{ExecuteMsg, QueryMsg};
 use cw20_base::state::{MinterData, TokenInfo, TOKEN_INFO, BALANCES};
 use cw20_base::ContractError;
 
-use crate::state::{ InstantiateMsg, SupportedNativeDenom, SUPPORTED_NATIVE_DENOM };
+use crate::state::{ InstantiateMsg, MarketplaceInfo, MARKETPLACE_INFO };
 
 // version info for migration info
 const CONTRACT_NAME: &str = "crates.io:cw20-base";
@@ -27,9 +27,15 @@ pub fn instantiate(
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
     // check valid token info
     msg.validate()?;
+
+    // this is a sanity check, to ensure that each token of this contract has garanteed by 1 native token
+    if msg.initial_balances.len() != 0 {
+        return Err(StdError::generic_err("Initial balances must be empty").into());
+    }
+
     // create initial accounts
     let total_supply = create_accounts(&mut deps, &msg.initial_balances)?;
-
+    
     if let Some(limit) = msg.get_cap() {
         if total_supply > limit {
             return Err(StdError::generic_err("Initial supply greater than cap").into());
@@ -54,11 +60,12 @@ pub fn instantiate(
     };
     TOKEN_INFO.save(deps.storage, &data)?;
 
-    // set value for NATIVE_DENOM
-    SUPPORTED_NATIVE_DENOM.save(
+    // set value for NATIVE_DENOM and marketplace contract address
+    MARKETPLACE_INFO.save(
         deps.storage,
-        &SupportedNativeDenom {
-            native_denom: msg.native_denom,
+        &MarketplaceInfo {
+            marketplace_contract: msg.marketplace_info.marketplace_contract,
+            native_denom: msg.marketplace_info.native_denom,
         },
     )?;
 
@@ -83,6 +90,7 @@ pub fn execute(
         ExecuteMsg::UpdateMinter {
             new_minter
         } => execute_update_minter(deps, env, info, new_minter),
+        // TODO: add message to update MarketplaceInfo here
         _ => {
             // the other messages not supported by this contract
             return Err(StdError::generic_err("Unsupported message").into());
@@ -96,6 +104,8 @@ pub fn query(
     env: Env,
     msg: QueryMsg
 ) -> StdResult<Binary> {
+    // TODO: add query for MarketplaceInfo here
+    // TODO: modify query Allowance return cap of minter for marketplace contract
     cw20_query(deps, env, msg)
 }
 
@@ -110,25 +120,12 @@ pub fn marketplace_execute_burn(
         return Err(ContractError::InvalidZeroAmount {});
     }
 
-    let config = TOKEN_INFO
+    let _config = TOKEN_INFO
         .may_load(deps.storage)?
         .ok_or(ContractError::Unauthorized {})?;
 
-    // sercurity check
-    // the minter cannot burn his own tokens
-    // this is a sanity check, as the minter should never have any real tokens
-    if config
-        .mint
-        .as_ref()
-        .ok_or(ContractError::Unauthorized {})?
-        .minter
-        != info.sender
-    {
-        return Err(StdError::generic_err("Minter cannot burn token").into());
-    }
-
     // get the denom of SupportedNativeDenom
-    let native_denom = SUPPORTED_NATIVE_DENOM
+    let native_denom = MARKETPLACE_INFO
         .load(deps.storage)?
         .native_denom;
     // check the balance of NATIVE_DENOM of contract
@@ -185,24 +182,14 @@ pub fn marketplace_execute_mint(
         .may_load(deps.storage)?
         .ok_or(ContractError::Unauthorized {})?;
 
-    // if config
-    //     .mint
-    //     .as_ref()
-    //     .ok_or(ContractError::Unauthorized {})?
-    //     .minter
-    //     != info.sender
-    // {
-    //     return Err(ContractError::Unauthorized {});
-    // }
-
     // check the funds are sent with the message
     // if the denom of funds is not the same as the native denom, we reject
-    let native_denom = SUPPORTED_NATIVE_DENOM.load(deps.storage)?.native_denom;
+    let native_denom = MARKETPLACE_INFO.load(deps.storage)?.native_denom;
     if  info.funds.len() != 1 || 
         info.funds[0].denom != native_denom {
         return Err(ContractError::Unauthorized {});
     }
-    
+
     // if funds smaller than amount, we reject
     if info.funds[0].amount < amount {
         return Err(ContractError::Unauthorized {});
@@ -240,19 +227,13 @@ pub fn marketplace_execute_transfer_from(
     recipient: String,
     amount: Uint128,
 ) -> Result<Response, ContractError> {
-    // this function is called by minter contract only
-    // get minter address from mint data
-    let minter = TOKEN_INFO.load(deps.storage)?.mint.unwrap().minter;
+    // this function is called by marketplace contract only
+    // get marketplace address from mint data
+    let marketplace = MARKETPLACE_INFO.load(deps.storage)?.marketplace_contract;
 
     // check if the sender is not minter
-    if minter != info.sender {
+    if marketplace != info.sender {
         return Err(ContractError::Unauthorized {});
-    }
-
-    // sercurity check
-    // the minter cannot transfer his own tokens to other address
-    if owner == minter.to_string() {
-        return Err(StdError::generic_err("Minter cannot transfer token").into());
     }
 
     let rcpt_addr = deps.api.addr_validate(&recipient)?;

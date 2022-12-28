@@ -15,7 +15,14 @@ mod tests {
     };
     use cw2981_royalties::msg::{Cw2981QueryMsg, RoyaltiesInfoResponse}; 
     use cw2981_royalties::{ExecuteMsg as Cw2981ExecuteMsg, QueryMsg as Cw721QueryMsg};
-    use cw721::{Approval, ApprovalResponse, Expiration, OwnerOfResponse};
+    use cw721::{Approval, ApprovalResponse, Expiration as Cw721Expiration, OwnerOfResponse};
+    use cw20::Expiration as Cw20Expiration;
+
+    use cosmwasm_std::{QueryRequest, BankQuery, Querier, BalanceResponse as BankBalanceResponse};
+    use cw20::BalanceResponse;
+    use cw_multi_test::Executor;
+
+    use crate::integration_tests::env::{NATIVE_DENOM, NATIVE_DENOM_2};
 
     const MOCK_CW2981_ADDR: &str = "cw2981_addr";
     const MOCK_OFFER_NFT_TOKEN_ID_1: &str = "1";
@@ -26,7 +33,7 @@ mod tests {
     const MOCK_OFFER_CW20_AMOUNT_MINIMUM: u128 = 1;
 
     const MOCK_OFFER_NFT_OWNER: &str = "owner";
-    const MOCK_OFFER_NFT_CREATOR: &str = "creator";
+    // const MOCK_OFFER_NFT_CREATOR: &str = "creator";
     const MOCK_OFFER_NFT_OFFERER_1: &str = "offerer 1";
     const MOCK_OFFER_NFT_OFFERER_INSUFFICIENT_BALANCE: &str = "offerer 2";
     const MOCK_OFFER_NFT_OFFERER_INSUFFICIENT_ALLOWANCE: &str = "offerer 3";
@@ -102,7 +109,7 @@ mod tests {
                                     to_binary(&ApprovalResponse {
                                         approval: Approval {
                                             spender: "owner".to_string(),
-                                            expires: Expiration::Never {},
+                                            expires: Cw721Expiration::Never {},
                                         },
                                     })
                                     .unwrap(),
@@ -166,7 +173,7 @@ mod tests {
                                     let result = ContractResult::Ok(
                                         to_binary(&cw20::AllowanceResponse {
                                             allowance: Uint128::from(MOCK_OFFER_CW20_AMOUNT_MINIMUM),
-                                            expires: Expiration::Never {},
+                                            expires: Cw20Expiration::Never {},
                                         })
                                         .unwrap(),
                                     );
@@ -175,7 +182,7 @@ mod tests {
                                     let result = ContractResult::Ok(
                                         to_binary(&cw20::AllowanceResponse {
                                             allowance: Uint128::from(MOCK_OFFER_CW20_AMOUNT),
-                                            expires: Expiration::Never {},
+                                            expires: Cw20Expiration::Never {},
                                         })
                                         .unwrap(),
                                     );
@@ -230,8 +237,8 @@ mod tests {
             sender: &str,
             contract_address: Addr,
             token_id: &str,
-            start_time: Option<Expiration>,
-            end_time: Option<Expiration>,
+            start_time: Option<Cw721Expiration>,
+            end_time: Option<Cw721Expiration>,
         ) -> Result<Response, ContractError> {
             let msg = ExecuteMsg::ListNft {
                 contract_address: contract_address.to_string(),
@@ -424,7 +431,7 @@ mod tests {
                 Addr::unchecked(MOCK_CW2981_ADDR),
                 "1",
                 None,
-                Some(Expiration::AtHeight(100)),
+                Some(Cw721Expiration::AtHeight(100)),
             )
             .unwrap();
     
@@ -688,7 +695,7 @@ mod tests {
                 "owner",
                 Addr::unchecked(MOCK_CW2981_ADDR),
                 "1",
-                Some(Expiration::AtTime(Timestamp::from_nanos(1_600_000_001))),
+                Some(Cw721Expiration::AtTime(Timestamp::from_nanos(1_600_000_001))),
                 None,
             )
             .unwrap();
@@ -721,7 +728,7 @@ mod tests {
                 Addr::unchecked(MOCK_CW2981_ADDR),
                 "1",
                 None,
-                Some(Expiration::AtTime(Timestamp::from_nanos(1_600_000_000))),
+                Some(Cw721Expiration::AtTime(Timestamp::from_nanos(1_600_000_000))),
             )
             .unwrap();
     
@@ -892,7 +899,7 @@ mod tests {
         contract_address: Addr,
         token_id: Option<String>,
         funds: Asset,
-        end_time: Expiration,
+        end_time: Cw20Expiration,
     ) -> Result<Response, ContractError> {
         let msg = ExecuteMsg::OfferNft {
             contract_address: contract_address.to_string(),
@@ -941,7 +948,7 @@ mod tests {
                     token_address: Addr::unchecked(MOCK_OFFER_CW20_ADDR), 
                     amount: 10000000 
                 },
-                Expiration::AtTime(block_time.plus_seconds(1000)),
+                Cw20Expiration::AtTime(block_time.plus_seconds(1000)),
             );
             println!("Response: {:?}", &response);
             assert!(response.is_ok());
@@ -965,7 +972,7 @@ mod tests {
                     token_address: Addr::unchecked(MOCK_OFFER_CW20_ADDR), 
                     amount: 10000000 
                 },
-                Expiration::AtTime(block_time.plus_seconds(1000)),
+                Cw20Expiration::AtTime(block_time.plus_seconds(1000)),
             );
             assert_eq!(response.err().unwrap().to_string(), ContractError::CustomError { val: "Nft not exist".to_string()}.to_string());
         }
@@ -988,7 +995,7 @@ mod tests {
                     token_address: Addr::unchecked(MOCK_OFFER_CW20_ADDR), 
                     amount: 10000000 
                 },
-                Expiration::AtTime(block_time.plus_seconds(1000)),
+                Cw20Expiration::AtTime(block_time.plus_seconds(1000)),
             );
             assert_eq!(response.err().unwrap().to_string(), ContractError::CustomError { val: "Cannot offer owned nft".to_string()}.to_string());
         }
@@ -1011,7 +1018,7 @@ mod tests {
                     token_address: Addr::unchecked(MOCK_OFFER_CW20_ADDR), 
                     amount: 10000000 
                 },
-                Expiration::AtTime(block_time.plus_seconds(1000)),
+                Cw20Expiration::AtTime(block_time.plus_seconds(1000)),
             );
             assert_eq!(response.err().unwrap().to_string(), ContractError::CustomError { val: "Collection offer is not supported".to_string()}.to_string());
         }
@@ -1034,7 +1041,7 @@ mod tests {
                     token_address: Addr::unchecked(MOCK_OFFER_CW20_ADDR), 
                     amount: 10000000
                 },
-                Expiration::AtTime(block_time.plus_seconds(1000)),
+                Cw20Expiration::AtTime(block_time.plus_seconds(1000)),
             );
             assert_eq!(response.err().unwrap().to_string(), ContractError::InsufficientAllowance{}.to_string());
         }
@@ -1057,7 +1064,7 @@ mod tests {
                     token_address: Addr::unchecked(MOCK_OFFER_CW20_ADDR), 
                     amount: 10000000
                 },
-                Expiration::AtTime(block_time.plus_seconds(1000)),
+                Cw20Expiration::AtTime(block_time.plus_seconds(1000)),
             );
             assert_eq!(response.err().unwrap().to_string(), ContractError::InsufficientBalance{}.to_string());
         }
@@ -1080,20 +1087,297 @@ mod tests {
                     token_address: Addr::unchecked(MOCK_OFFER_CW20_ADDR), 
                     amount: 10000000
                 },
-                Expiration::AtTime(block_time.minus_seconds(1_000)),
+                Cw20Expiration::AtTime(block_time.minus_seconds(1_000)),
             );
             
             assert_eq!(response.err().unwrap().to_string(), ContractError::InvalidEndTime{}.to_string());
         }
     }
+
+    mod convert_and_revert_native {
+        
+
+        use super::*;
+
+        // user cannot convert native token to twilight token because not provided valid denom
+        #[test]
+        fn user_cannot_convert_native_because_not_valid_denom() {
+            // get integration test app and contracts
+            let (mut app, contracts) = instantiate_contracts();
+            let cw20_address = contracts[2].contract_addr.clone();
+
+            // Mint 1000000000 native token to USER_1
+            app.sudo(cw_multi_test::SudoMsg::Bank(
+                cw_multi_test::BankSudo::Mint {
+                    to_address: USER_1.to_string(),
+                    amount: vec![
+                        Coin {
+                            amount: Uint128::from(1000000000u128),
+                            denom: NATIVE_DENOM_2.to_string()
+                        }
+                    ],
+                },
+            ))
+            .unwrap();
+
+            // query balance of USER_1 in twilight token
+            let balance: BalanceResponse = app.wrap()
+                .query_wasm_smart(
+                    cw20_address.clone(),
+                    &cw20::Cw20QueryMsg::Balance {
+                        address: USER_1.to_string(),
+                    },
+                )
+                .unwrap();
+            assert_eq!(balance.balance, Uint128::zero());
+
+            // execute mint function to convert native token to twilight token
+            let response = app
+                .execute_contract(
+                    Addr::unchecked(USER_1.to_string()),
+                    Addr::unchecked(cw20_address.clone()),
+                    &cw20::Cw20ExecuteMsg::Mint {
+                        recipient: USER_1.to_string(),
+                        amount: Uint128::from(100000000u128),
+                    },
+                    &vec![Coin {
+                        amount: Uint128::from(100000000u128),
+                        denom: NATIVE_DENOM_2.to_string(),
+                    }],
+                );
+            assert_eq!(response.err().unwrap().source().unwrap().to_string(), ContractError::Unauthorized {}.to_string());
+            
+            // query balance of USER_1 in twilight token
+            let balance: BalanceResponse = app.wrap()
+                .query_wasm_smart(
+                    cw20_address.clone(),
+                    &cw20::Cw20QueryMsg::Balance {
+                        address: USER_1.to_string(),
+                    },
+                )
+                .unwrap();
+            assert_eq!(balance.balance, Uint128::zero());
+        }
+
+        // user cannot convert native token to twilight token because not provided enough funds
+        #[test]
+        fn user_cannot_convert_native_because_not_enough_funds() {
+            // get integration test app and contracts
+            let (mut app, contracts) = instantiate_contracts();
+            let cw20_address = contracts[2].contract_addr.clone();
+
+            // Mint 1000000000 native token to USER_1
+            app.sudo(cw_multi_test::SudoMsg::Bank(
+                cw_multi_test::BankSudo::Mint {
+                    to_address: USER_1.to_string(),
+                    amount: vec![
+                        Coin {
+                            amount: Uint128::from(1000000000u128),
+                            denom: NATIVE_DENOM.to_string()
+                        }
+                    ],
+                },
+            ))
+            .unwrap();
+
+            // query balance of USER_1 in twilight token
+            let balance: BalanceResponse = app.wrap()
+                .query_wasm_smart(
+                    cw20_address.clone(),
+                    &cw20::Cw20QueryMsg::Balance {
+                        address: USER_1.to_string(),
+                    },
+                )
+                .unwrap();
+            assert_eq!(balance.balance, Uint128::zero());
+
+            // execute mint function to convert native token to twilight token
+            let response = app
+                .execute_contract(
+                    Addr::unchecked(USER_1.to_string()),
+                    Addr::unchecked(cw20_address.clone()),
+                    &cw20::Cw20ExecuteMsg::Mint {
+                        recipient: USER_1.to_string(),
+                        amount: Uint128::from(100000001u128),
+                    },
+                    &vec![Coin {
+                        amount: Uint128::from(100000000u128),
+                        denom: NATIVE_DENOM.to_string(),
+                    }],
+                );
+            assert_eq!(response.err().unwrap().source().unwrap().to_string(), ContractError::Unauthorized {}.to_string());
+            
+            // query balance of USER_1 in twilight token
+            let balance: BalanceResponse = app.wrap()
+                .query_wasm_smart(
+                    cw20_address.clone(),
+                    &cw20::Cw20QueryMsg::Balance {
+                        address: USER_1.to_string(),
+                    },
+                )
+                .unwrap();
+            assert_eq!(balance.balance, Uint128::zero());
+        }
+
+        // user can convert native token to twilight token by execute minting
+        #[test]
+        fn user_can_convert_native_token_success() {
+            // get integration test app and contracts
+            let (mut app, contracts) = instantiate_contracts();
+            let cw20_address = contracts[2].contract_addr.clone();
+
+            // Mint 1000000000 native token to USER_1
+            app.sudo(cw_multi_test::SudoMsg::Bank(
+                cw_multi_test::BankSudo::Mint {
+                    to_address: USER_1.to_string(),
+                    amount: vec![
+                        Coin {
+                            amount: Uint128::from(1000000000u128),
+                            denom: NATIVE_DENOM.to_string()
+                        }
+                    ],
+                },
+            ))
+            .unwrap();
+
+            // query balance of USER_1 in twilight token
+            let balance: BalanceResponse = app.wrap()
+                .query_wasm_smart(
+                    cw20_address.clone(),
+                    &cw20::Cw20QueryMsg::Balance {
+                        address: USER_1.to_string(),
+                    },
+                )
+                .unwrap();
+            assert_eq!(balance.balance, Uint128::zero());
+
+            // query balance of native token in twilight token contract
+            let req: QueryRequest<BankQuery> = QueryRequest::Bank(BankQuery::Balance { 
+                address: cw20_address.to_string(), 
+                denom: NATIVE_DENOM.to_string() 
+            });
+            let res = app.raw_query(&to_binary(&req).unwrap()).unwrap().unwrap();
+            let balance: BankBalanceResponse = from_binary(&res).unwrap();
+            assert_eq!(balance.amount.amount, Uint128::zero()); 
+
+            // execute mint function to convert native token to twilight token
+            let response = app
+                .execute_contract(
+                    Addr::unchecked(USER_1.to_string()),
+                    Addr::unchecked(cw20_address.clone()),
+                    &cw20::Cw20ExecuteMsg::Mint {
+                        recipient: USER_1.to_string(),
+                        amount: Uint128::from(100000000u128),
+                    },
+                    &vec![Coin {
+                        amount: Uint128::from(100000000u128),
+                        denom: NATIVE_DENOM.to_string(),
+                    }],
+                );
+            assert!(response.is_ok());
+            
+            // query balance of USER_1 in twilight token
+            let balance: BalanceResponse = app.wrap()
+                .query_wasm_smart(
+                    cw20_address.clone(),
+                    &cw20::Cw20QueryMsg::Balance {
+                        address: USER_1.to_string(),
+                    },
+                )
+                .unwrap();
+            assert_eq!(balance.balance, Uint128::from(100000000u128));
+
+            // query balance of native token in twilight token contract
+            let req: QueryRequest<BankQuery> = QueryRequest::Bank(BankQuery::Balance { 
+                address: cw20_address.to_string(), 
+                denom: NATIVE_DENOM.to_string() 
+            });
+            let res = app.raw_query(&to_binary(&req).unwrap()).unwrap().unwrap();
+            let balance: BankBalanceResponse = from_binary(&res).unwrap();
+            assert_eq!(balance.amount.amount, Uint128::from(100000000u128)); 
+        }
+
+        // user can revert native token from twilight token by execute burning
+        #[test]
+        fn user_can_revert_native_token_success() {
+            // get integration test app and contracts
+            let (mut app, contracts) = instantiate_contracts();
+            let cw20_address = contracts[2].contract_addr.clone();
+
+            // Mint 1000000000 native token to USER_1
+            app.sudo(cw_multi_test::SudoMsg::Bank(
+                cw_multi_test::BankSudo::Mint {
+                    to_address: USER_1.to_string(),
+                    amount: vec![
+                        Coin {
+                            amount: Uint128::from(1000000000u128),
+                            denom: NATIVE_DENOM.to_string()
+                        }
+                    ],
+                },
+            ))
+            .unwrap();
+
+            // execute mint function to convert native token to twilight token
+            let response = app
+                .execute_contract(
+                    Addr::unchecked(USER_1.to_string()),
+                    Addr::unchecked(cw20_address.clone()),
+                    &cw20::Cw20ExecuteMsg::Mint {
+                        recipient: USER_1.to_string(),
+                        amount: Uint128::from(100000000u128),
+                    },
+                    &vec![Coin {
+                        amount: Uint128::from(100000000u128),
+                        denom: NATIVE_DENOM.to_string(),
+                    }],
+                );
+            assert!(response.is_ok());
+            
+            // query balance of USER_1 in twilight token
+            let balance: BalanceResponse = app.wrap()
+                .query_wasm_smart(
+                    cw20_address.clone(),
+                    &cw20::Cw20QueryMsg::Balance {
+                        address: USER_1.to_string(),
+                    },
+                )
+                .unwrap();
+            assert_eq!(balance.balance, Uint128::from(100000000u128));
+
+            // execute burn function to revert native token from twilight token
+            let response = app
+                .execute_contract(
+                    Addr::unchecked(USER_1.to_string()),
+                    Addr::unchecked(cw20_address.clone()),
+                    &cw20::Cw20ExecuteMsg::Burn {
+                        amount: Uint128::from(50000000u128),
+                    },
+                    &vec![],
+                );
+            
+            // query balance of USER_1 in twilight token
+            let balance: BalanceResponse = app.wrap()
+                .query_wasm_smart(
+                    cw20_address.clone(),
+                    &cw20::Cw20QueryMsg::Balance {
+                        address: USER_1.to_string(),
+                    },
+                )
+                .unwrap();
+            assert_eq!(balance.balance, Uint128::from(50000000u128));
+        }    
+            
+    }
     
     mod accept_offer {
+        use crate::integration_tests::env::NATIVE_DENOM;
+
         use super::*;
         use cw20::{Cw20QueryMsg, BalanceResponse};
         use cw2981_royalties::{MintMsg, Metadata};
         use cw721_base::msg::ExecuteMsg as Cw721ExecuteMsg;
         use cw_multi_test::Executor;
-        use cw20_base::msg::ExecuteMsg as Cw20ExecuteMsg;
 
         // owner can accept offer
         #[test]
@@ -1114,7 +1398,7 @@ mod tests {
                     token_address: Addr::unchecked(MOCK_OFFER_CW20_ADDR), 
                     amount: 10000000
                 },
-                Expiration::AtTime(block_time.plus_seconds(1000)),
+                Cw20Expiration::AtTime(block_time.plus_seconds(1000)),
             ).unwrap();
 
             // accept offer
@@ -1133,14 +1417,14 @@ mod tests {
         fn owner_can_accept_offer_new() {
             // get integration test app and contracts
             let (mut app, contracts) = instantiate_contracts();
-            let cw20_address = contracts[0].contract_addr.clone();
-            let cw2981_address = contracts[1].contract_addr.clone();
-            let marketplace_address = contracts[2].contract_addr.clone();
+            let cw2981_address = contracts[0].contract_addr.clone();
+            let marketplace_address = contracts[1].contract_addr.clone();
+            let cw20_address = contracts[2].contract_addr.clone();
 
             // prepare mint cw2981 message to USER_1
             let mint_msg: Cw721ExecuteMsg<Metadata, Metadata> = Cw721ExecuteMsg::Mint(MintMsg {
                 token_id: MOCK_OFFER_NFT_TOKEN_ID_1.to_string(),
-                owner: USER_1.to_string(),
+                owner: ADMIN.to_string(),
                 token_uri: Some("https://ipfs.io/ipfs/Qme7ss3ARVgxv6rXqVPiikMJ8u2NLgmgszg13pYrDKEoiu".to_string()),
                 extension: Metadata {
                     image: None,
@@ -1157,7 +1441,7 @@ mod tests {
                 },
             });
 
-            // mint cw2981 token to USER_1
+            // mint cw2981 token to ADMIN
             let res = app.execute_contract(
                 Addr::unchecked(ADMIN),
                 Addr::unchecked(cw2981_address.clone()),
@@ -1166,21 +1450,35 @@ mod tests {
             );
             assert!(res.is_ok());
 
-            // prepare increase allowance message to marketplace
-            let increase_allowance_msg = Cw20ExecuteMsg::IncreaseAllowance {
-                spender: marketplace_address.clone(),
-                amount: Uint128::from(10000001u128),
-                expires: None,
-            };
+            // Mint 1000000000 native token to USER_1
+            app.sudo(cw_multi_test::SudoMsg::Bank(
+                cw_multi_test::BankSudo::Mint {
+                    to_address: USER_1.to_string(),
+                    amount: vec![
+                        Coin {
+                            amount: Uint128::from(1000000000u128),
+                            denom: NATIVE_DENOM.to_string()
+                        }
+                    ],
+                },
+            ))
+            .unwrap();
 
-            // increase allowance for marketplace
-            let res = app.execute_contract(
-                Addr::unchecked(ADMIN),
-                Addr::unchecked(cw20_address.clone()),
-                &increase_allowance_msg,
-                &[]
-            );
-            assert!(res.is_ok());
+            // execute mint function to convert native token to twilight token
+            let response = app
+                .execute_contract(
+                    Addr::unchecked(USER_1.to_string()),
+                    Addr::unchecked(cw20_address.clone()),
+                    &cw20::Cw20ExecuteMsg::Mint {
+                        recipient: USER_1.to_string(),
+                        amount: Uint128::from(100000000u128),
+                    },
+                    &vec![Coin {
+                        amount: Uint128::from(100000000u128),
+                        denom: NATIVE_DENOM.to_string(),
+                    }],
+                );
+            assert!(response.is_ok());
 
             // offerer creates offer
             // prepare offer nft message
@@ -1191,16 +1489,17 @@ mod tests {
                     token_address: Addr::unchecked(cw20_address.clone()), 
                     amount: 10000000, 
                 },
-                end_time: Expiration::AtTime(app.block_info().time.plus_seconds(1000)),
+                end_time: Cw20Expiration::AtTime(app.block_info().time.plus_seconds(1000)),
             };
 
             // offerer creates offer
             let res = app.execute_contract(
-                Addr::unchecked(ADMIN),
+                Addr::unchecked(USER_1.to_string()),
                 Addr::unchecked(marketplace_address.clone()),
                 &offer_nft_msg,
                 &[]
             );
+            println!("res: {:?}", res);
             assert!(res.is_ok());
 
             // check the owner of the token

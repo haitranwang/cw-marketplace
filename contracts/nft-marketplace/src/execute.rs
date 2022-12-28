@@ -2,9 +2,9 @@ use cosmwasm_std::{
     to_binary, Addr, BankMsg, Coin, DepsMut, Env, MessageInfo, QueryRequest, Response, StdResult,
     Uint128, WasmMsg, WasmQuery, CosmosMsg,
 };
-use cw20::{ AllowanceResponse, Cw20ExecuteMsg, Cw20QueryMsg, BalanceResponse };
+use cw20::{ AllowanceResponse, Cw20ExecuteMsg, Cw20QueryMsg, BalanceResponse, Expiration as Cw20Expiration };
 use cw2981_royalties::{msg::RoyaltiesInfoResponse, ExecuteMsg as Cw2981ExecuteMsg, QueryMsg as Cw2981QueryMsg};
-use cw721::{Cw721QueryMsg, Expiration};
+use cw721::{Cw721QueryMsg, Expiration as Cw721Expiration};
 use crate::order_state::{Asset, ItemType, OrderComponents, OrderType, consideration_item, offer_item, order_key, PaymentAsset};
 use crate::{
     state::{AuctionContract, listing_key, AuctionConfig, Listing, ListingStatus, MarketplaceContract},
@@ -96,7 +96,7 @@ impl MarketplaceContract<'static> {
         // check if approval is never expired
         match approval_response {
             Ok(approval) => match approval.approval.expires {
-                Expiration::Never {} => {}
+                Cw721Expiration::Never {} => {}
                 _ => return Err(ContractError::Unauthorized {}),
             },
             Err(_) => {
@@ -406,7 +406,7 @@ impl MarketplaceContract<'static> {
         contract_address: Addr,
         token_id: Option<String>,
         funds: Asset,
-        end_time: Expiration,
+        end_time: Cw20Expiration,
     ) -> Result<Response, ContractError> {
         // check if the end time is valid
         if end_time.is_expired(&env.block) {
@@ -687,7 +687,7 @@ impl MarketplaceContract<'static> {
     fn payment_with_royalty(
         &self,
         deps: DepsMut,
-        info: MessageInfo,
+        _info: MessageInfo,
         nft_contract_address: Addr,
         nft_id: String,
         token: PaymentAsset,

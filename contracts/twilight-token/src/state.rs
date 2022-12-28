@@ -12,7 +12,7 @@ pub struct InstantiateMsg {
     pub decimals: u8,
     pub initial_balances: Vec<Cw20Coin>,
     pub mint: Option<MinterResponse>,
-    pub native_denom: String,
+    pub marketplace_info: MarketplaceInfo,
 }
 
 impl InstantiateMsg {
@@ -75,7 +75,11 @@ mod test {
             }),
             name: "test_token".to_string(),
             symbol: "TNT".to_string(),
-            native_denom: "uaura".to_string(),
+            marketplace_info: MarketplaceInfo { 
+                marketplace_contract: "marketplace_contract".to_string(), 
+                native_denom: "uaura".to_string(),
+            }
+            
         };
 
         assert_eq!(msg.get_cap(), Some(Uint128::from(1u128)))
@@ -92,7 +96,10 @@ mod test {
             }),
             name: "test_token".to_string(),
             symbol: "TNT".to_string(),
-            native_denom: "uaura".to_string(),
+            marketplace_info: MarketplaceInfo { 
+                marketplace_contract: "marketplace_contract".to_string(), 
+                native_denom: "uaura".to_string(),
+            },
         };
 
         assert_eq!(valid_msg.validate(), Ok(()));
@@ -106,7 +113,10 @@ mod test {
             }),
             name: "a".to_string(),
             symbol: "TNT".to_string(),
-            native_denom: "uaura".to_string(),
+            marketplace_info: MarketplaceInfo { 
+                marketplace_contract: "marketplace_contract".to_string(), 
+                native_denom: "uaura".to_string(),
+            },
         };
 
         assert_eq!(
@@ -125,7 +135,10 @@ mod test {
             }),
             name: "test_token".to_string(),
             symbol: "TN".to_string(),
-            native_denom: "uaura".to_string(),
+            marketplace_info: MarketplaceInfo { 
+                marketplace_contract: "marketplace_contract".to_string(), 
+                native_denom: "uaura".to_string(),
+            },
         };
 
         assert_eq!(
@@ -144,7 +157,10 @@ mod test {
             }),
             name: "test_token".to_string(),
             symbol: "TNT".to_string(),
-            native_denom: "uaura".to_string(),
+            marketplace_info: MarketplaceInfo { 
+                marketplace_contract: "marketplace_contract".to_string(), 
+                native_denom: "uaura".to_string(),
+            },
         };
 
         assert_eq!(
@@ -155,8 +171,9 @@ mod test {
 }
 
 #[cw_serde]
-pub struct SupportedNativeDenom {
+pub struct MarketplaceInfo {
+    pub marketplace_contract: String,
     pub native_denom: String,
 }
 
-pub const SUPPORTED_NATIVE_DENOM: Item<SupportedNativeDenom> = Item::new("supported_native_denom");
+pub const MARKETPLACE_INFO: Item<MarketplaceInfo> = Item::new("marketplace_info");
