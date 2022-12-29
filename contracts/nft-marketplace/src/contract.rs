@@ -108,6 +108,17 @@ pub fn execute(
                 api.addr_validate(&contract_address)?,
                 token_id,
             ),
+        ExecuteMsg::CancelNftOffer {
+            contract_address, 
+            token_id 
+        } => contract()
+            .execute_cancel_nft_offer(
+                deps,
+                _env,
+                info,
+                api.addr_validate(&contract_address)?,
+                token_id,
+            ),
     }
 }
 
@@ -147,6 +158,11 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
             api.addr_validate(&contract_address)?,
             code_id,
             auction_config,
+        )?),
+        QueryMsg::Offers { item, offerer } => to_binary(&contract().query_offers(
+            deps,
+            item,
+            offerer,
         )?),
     }
 }

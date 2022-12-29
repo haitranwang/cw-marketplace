@@ -1,9 +1,9 @@
-use cosmwasm_std::{Addr, Deps, Order, StdResult};
+use cosmwasm_std::{Addr, Deps, Order, StdResult, StdError};
 use cw_storage_plus::Bound;
 
 use crate::{
-    msg::ListingsResponse,
-    state::{listing_key, AuctionConfig, Listing, ListingKey, MarketplaceContract},
+    msg::{ListingsResponse, OffersResponse},
+    state::{listing_key, AuctionConfig, Listing, ListingKey, MarketplaceContract}, order_state::{Asset, order_key, OrderType, OrderKey},
 };
 
 impl MarketplaceContract<'static> {
@@ -70,5 +70,87 @@ impl MarketplaceContract<'static> {
         // let res: crate::msg::ValidateAuctionConfigResponse = deps
         //     .querier
         //     .query_wasm_smart(auction_contract.contract_address, &msg)?;
+    }
+
+    pub fn query_offers(
+        self,
+        deps: Deps,
+        item: Option<Asset>,
+        offerer: Option<String>,
+    ) -> StdResult<OffersResponse>{
+        // if both item and offerer are exist, this is a query for a specific offer
+        if let (Some(item), Some(offerer)) = (item.clone(), offerer.clone()) {
+            // match type of item
+            match item {
+                Asset::Nft { nft_address, token_id  } => {
+                    // if token_is is not exist, return error
+                    let token_id = token_id.ok_or(StdError::generic_err("Token id is required"))?;
+                    // generate order key
+                    let order_key = order_key(&deps.api.addr_validate(&offerer.to_string()).unwrap(), &nft_address, &token_id);
+                    // load order
+                    let order = self.orders.load(deps.storage, order_key)?;
+
+                    // if the type of order is not offer, return error
+                    if order.order_type != OrderType::OFFER {
+                        return Err(StdError::generic_err("This is not an offer"));
+                    }
+
+                    // return offer
+                    return Ok(OffersResponse { offers: vec![order] });
+                }
+                _ => {
+                    return Err(StdError::generic_err("Unsupported asset type"));
+                }
+            }
+        }
+        // if there is only item, this is a query for all offer related a specific item
+        else if let Some(item) = item.clone() {
+            // match type of item
+            match item {
+                Asset::Nft { nft_address, token_id  } => {
+                    // if token_is is not exist, return error
+                    let token_id = token_id.ok_or(StdError::generic_err("Token id is required"))?;
+
+                    // load order
+                    let orders = self.orders.idx.nfts
+                        .prefix((nft_address, token_id))
+                        .range(deps.storage, None, None, Order::Descending)
+                        .filter( | item | {
+                            match item {
+                                Ok((_, order)) => order.order_type == OrderType::OFFER,
+                                Err(_) => false
+                            }
+                        })
+                        .map(|item| item.map(|(_, order)| order))
+                        .collect::<StdResult<Vec<_>>>()?;
+                    // return offer
+                    Ok(OffersResponse { offers: orders })
+                }
+                _ => {
+                    return Err(StdError::generic_err("Unsupported asset type"));
+                }
+            }
+        }
+        // if there is only offerer, this is a query for all offer related a specific offerer
+        else if let Some(offerer) = offerer.clone() {
+            // load order
+            let orders = self.orders.idx.users
+                .prefix(deps.api.addr_validate(&offerer.to_string())?)
+                .range(deps.storage, None, None, Order::Descending)
+                .filter( | item | {
+                    match item {
+                        Ok((_, order)) => order.order_type == OrderType::OFFER,
+                        Err(_) => false
+                    }
+                })
+                .map(|item| item.map(|(_, order)| order))
+                .collect::<StdResult<Vec<_>>>()?;
+            // return offer
+            Ok(OffersResponse { offers: orders })
+        }
+        // aleast one of item and offerer must be exist
+        else {
+            return Err(StdError::generic_err("Item or offerer is required"));
+        }
     }
 }

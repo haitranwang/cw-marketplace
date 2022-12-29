@@ -1,11 +1,13 @@
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
-use cosmwasm_std::{Binary, Deps, DepsMut, Env, MessageInfo, Response, StdError, StdResult, Uint128, attr, BankMsg, Coin};
+use cosmwasm_std::{Binary, Deps, DepsMut, Env, MessageInfo, Response, StdError, StdResult, Uint128, attr, BankMsg, Coin, to_binary};
 
 use cw2::set_contract_version;
+use cw20::{AllowanceResponse, Expiration};
+use cw20_base::allowances::query_allowance;
 use cw20_base::contract::{create_accounts, query as cw20_query, execute_update_minter};
 use cw20_base::msg::{ExecuteMsg, QueryMsg};
-use cw20_base::state::{MinterData, TokenInfo, TOKEN_INFO, BALANCES};
+use cw20_base::state::{MinterData, TokenInfo, TOKEN_INFO, BALANCES, ALLOWANCES};
 use cw20_base::ContractError;
 
 use crate::state::{ InstantiateMsg, MarketplaceInfo, MARKETPLACE_INFO };
@@ -105,8 +107,30 @@ pub fn query(
     msg: QueryMsg
 ) -> StdResult<Binary> {
     // TODO: add query for MarketplaceInfo here
-    // TODO: modify query Allowance return cap of minter for marketplace contract
-    cw20_query(deps, env, msg)
+    match msg {
+        QueryMsg::Allowance { owner, spender } => {
+            let marketplace_info = MARKETPLACE_INFO.load(deps.storage)?;
+            if spender == marketplace_info.marketplace_contract {
+                // if spender is marketplace contract, return cap of minter
+                return to_binary(&marketplace_query_allowance(deps)?);
+            } else {
+                return to_binary(&query_allowance(deps, owner, spender)?);
+            }
+        }
+        _ => cw20_query(deps, env, msg)
+    }
+    
+}
+
+pub fn marketplace_query_allowance(deps: Deps) -> StdResult<AllowanceResponse> {
+    // get cap from mint data
+    let minter = TOKEN_INFO.load(deps.storage).unwrap().mint.unwrap();
+    let cap = minter.cap.unwrap_or_default();
+
+    Ok(AllowanceResponse {
+        allowance: cap,
+        expires: Expiration::Never {},
+    })
 }
 
 // After a user burn the token, contract will return the same amount of native token to him

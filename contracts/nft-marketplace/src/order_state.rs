@@ -9,7 +9,7 @@ pub type User = Addr;
 #[cw_serde]
 pub enum OrderType {
     OFFER,
-    LISTING
+    LISTING,
 }
 
 #[cw_serde]

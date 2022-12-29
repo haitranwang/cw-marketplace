@@ -2,7 +2,7 @@ use cosmwasm_schema::{cw_serde, QueryResponses};
 use cosmwasm_std::Addr;
 use cw20::Expiration;
 
-use crate::{state::{AuctionConfig, AuctionContract, Listing}, order_state::Asset};
+use crate::{state::{AuctionConfig, AuctionContract, Listing}, order_state::{Asset, OrderComponents}};
 
 #[cw_serde]
 pub struct InstantiateMsg {
@@ -50,6 +50,11 @@ pub enum ExecuteMsg {
         contract_address: String,
         token_id: Option<String>,
     },
+    // Cancel a Nft offer
+    CancelNftOffer {
+        contract_address: String,
+        token_id: Option<String>,
+    },
 }
 
 #[cw_serde]
@@ -81,6 +86,12 @@ pub enum QueryMsg {
         code_id: u32,
         auction_config: AuctionConfig,
     },
+    // get list offers
+    #[returns(OffersResponse)]
+    Offers {
+        item: Option<Asset>,
+        offerer: Option<String>,
+    },
 }
 
 #[cw_serde]
@@ -91,4 +102,9 @@ pub struct ListingsResponse {
 #[cw_serde]
 pub struct ValidateResponse {
     pub valid: bool,
+}
+
+#[cw_serde]
+pub struct OffersResponse {
+    pub offers: Vec<OrderComponents>,
 }

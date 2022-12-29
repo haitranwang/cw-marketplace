@@ -31,6 +31,7 @@ mod tests {
     const MOCK_OFFER_CW20_ADDR: &str = "cw20_addr";
     const MOCK_OFFER_CW20_AMOUNT: u128 = 1000000000;
     const MOCK_OFFER_CW20_AMOUNT_MINIMUM: u128 = 1;
+    const MOCK_OFFER_CW20_PRICE: u128 = 10000000;
 
     const MOCK_OFFER_NFT_OWNER: &str = "owner";
     // const MOCK_OFFER_NFT_CREATOR: &str = "creator";
@@ -1355,6 +1356,7 @@ mod tests {
                     },
                     &vec![],
                 );
+            assert!(response.is_ok());
             
             // query balance of USER_1 in twilight token
             let balance: BalanceResponse = app.wrap()
@@ -1421,7 +1423,7 @@ mod tests {
             let marketplace_address = contracts[1].contract_addr.clone();
             let cw20_address = contracts[2].contract_addr.clone();
 
-            // prepare mint cw2981 message to USER_1
+            // prepare mint cw2981 message to ADMIN
             let mint_msg: Cw721ExecuteMsg<Metadata, Metadata> = Cw721ExecuteMsg::Mint(MintMsg {
                 token_id: MOCK_OFFER_NFT_TOKEN_ID_1.to_string(),
                 owner: ADMIN.to_string(),
@@ -1436,8 +1438,8 @@ mod tests {
                     background_color: None,
                     animation_url: None,
                     youtube_url: None,
-                    royalty_percentage: Some(10),
-                    royalty_payment_address: Some(USER_1.to_string()),
+                    royalty_percentage: Some(20),
+                    royalty_payment_address: Some(ADMIN.to_string()),
                 },
             });
 
@@ -1487,19 +1489,18 @@ mod tests {
                 token_id: Some(MOCK_OFFER_NFT_TOKEN_ID_1.to_string()),
                 funds: Asset::Cw20 { 
                     token_address: Addr::unchecked(cw20_address.clone()), 
-                    amount: 10000000, 
+                    amount: MOCK_OFFER_CW20_PRICE, 
                 },
                 end_time: Cw20Expiration::AtTime(app.block_info().time.plus_seconds(1000)),
             };
 
-            // offerer creates offer
+            // offerer (USER_1) creates offer
             let res = app.execute_contract(
                 Addr::unchecked(USER_1.to_string()),
                 Addr::unchecked(marketplace_address.clone()),
                 &offer_nft_msg,
                 &[]
             );
-            println!("res: {:?}", res);
             assert!(res.is_ok());
 
             // check the owner of the token
@@ -1510,12 +1511,13 @@ mod tests {
                     include_expired: None,
                 }
             ).unwrap();
-            assert_eq!(res.owner, USER_1.to_string());
+            // it should be ADMIN
+            assert_eq!(res.owner, ADMIN.to_string());
 
             // *******************
             // OWNER ACCEPTS OFFER
             // *******************
-            // USER_1 must approve marketplace to transfer nft token
+            // ADMIN must approve marketplace to transfer nft token
             // prepare approve message
             let approve_msg: Cw721ExecuteMsg<Metadata, Metadata> = Cw721ExecuteMsg::Approve {
                 spender: marketplace_address.clone(),
@@ -1523,9 +1525,9 @@ mod tests {
                 expires: None,
             };
 
-            // USER_1 approves marketplace to transfer nft token
+            // ADMIN approves marketplace to transfer nft token
             let res = app.execute_contract(
-                Addr::unchecked(USER_1),
+                Addr::unchecked(ADMIN),
                 Addr::unchecked(cw2981_address.clone()),
                 &approve_msg,
                 &[]
@@ -1534,14 +1536,14 @@ mod tests {
 
             // prepare accept offer message
             let accept_offer_msg = ExecuteMsg::AcceptNftOffer {
-                offerer: ADMIN.to_string(),
+                offerer: USER_1.to_string(),
                 contract_address: cw2981_address.clone(),
                 token_id: Some(MOCK_OFFER_NFT_TOKEN_ID_1.to_string()),
             };
 
-            // owner accepts offer
+            // owner (ADMIN) accepts offer
             let res = app.execute_contract(
-                Addr::unchecked(USER_1),
+                Addr::unchecked(ADMIN),
                 Addr::unchecked(marketplace_address.clone()),
                 &accept_offer_msg,
                 &[]
@@ -1556,15 +1558,26 @@ mod tests {
                     include_expired: None,
                 }
             ).unwrap();
-            assert_eq!(res.owner, ADMIN.to_string());
+            assert_eq!(res.owner, USER_1.to_string());
 
-            // check the balance of the offerer
-            let res: BalanceResponse = app.wrap().query_wasm_smart(
-                Addr::unchecked(cw20_address.clone()),
-                &Cw20QueryMsg::Balance { address: USER_1.to_string() }
+            // query the RoyaltyInfo of the token
+            let res: RoyaltiesInfoResponse = app.wrap().query_wasm_smart(
+                Addr::unchecked(cw2981_address.clone()),
+                &Cw721QueryMsg::Extension{
+                    msg: Cw2981QueryMsg::RoyaltyInfo {
+                        token_id: MOCK_OFFER_NFT_TOKEN_ID_1.to_string(),
+                        sale_price: MOCK_OFFER_CW20_PRICE.into(),
+                    }
+                }
             ).unwrap();
 
-            assert_eq!(res.balance, Uint128::from(10000000u128));
+            // check the balance cw20 of the offerer
+            let res: BalanceResponse = app.wrap().query_wasm_smart(
+                Addr::unchecked(cw20_address.clone()),
+                &Cw20QueryMsg::Balance { address: ADMIN.to_string() }
+            ).unwrap();
+
+            assert_eq!(res.balance, Uint128::from(MOCK_OFFER_CW20_PRICE));
         }
     }
 

@@ -503,7 +503,7 @@ impl MarketplaceContract<'static> {
 
                         // generate order components
                         let order_offer = OrderComponents {
-                            order_type: OrderType::OFFER,
+                            order_type: OrderType::OFFER,                   // The type of offer must be OFFER
                             order_id: order_key.clone(),
                             offerer: info.sender.clone(),
                             offer: [offer_item].to_vec(),
@@ -577,6 +577,13 @@ impl MarketplaceContract<'static> {
                     });
                 }
 
+                // if the offer field is empty, then return error
+                if order_components.offer.is_empty() {
+                    return Err(ContractError::CustomError {
+                        val: ("Offer does not exist".to_string()),
+                    });
+                }
+
                 // if the end time of the offer is expired, then return error
                 if order_components.end_time.unwrap().is_expired(&env.block) {
                     return Err(ContractError::CustomError {
@@ -623,7 +630,7 @@ impl MarketplaceContract<'static> {
                         match &payment_item {
                             PaymentAsset::Cw20 { token_address: _, amount: _ } => {
                                 let payment_messages = self.payment_with_royalty(
-                                    deps,
+                                    &deps,
                                     info.clone(),
                                     nft_address.clone(),
                                     token_id.as_ref().unwrap().clone(),
@@ -662,7 +669,10 @@ impl MarketplaceContract<'static> {
 
                         res = res
                             .add_attribute("method", "execute_accept_nft_offer");
-
+                        
+                        // After the offer is accepted, we will delete the order
+                        self.orders.remove(deps.storage, order_key)?;
+                        
                         Ok(res)
                     }
                     // if the consideration item is not Nft, then return error
@@ -683,10 +693,53 @@ impl MarketplaceContract<'static> {
         }
     }
 
+    // function to cancel offer nft using ordering style
+    pub fn execute_cancel_nft_offer(
+        &self,
+        deps: DepsMut,
+        _env: Env,
+        info: MessageInfo,
+        contract_address: Addr,
+        token_id: Option<String>,
+    ) -> Result<Response, ContractError> {
+        match token_id {
+            // match if the token_id is exist, then this order is offer for a specific nft
+            Some(token_id) => {
+                // generate order key based on the sender address, contract address and token id
+                let order_key = order_key(&info.sender, &contract_address, &token_id);
+                
+                // get the information of the order
+                let order_components = self.orders.load(deps.storage, order_key.clone())?;
+
+                // if order is not offer type, then return error
+                if order_components.order_type != OrderType::OFFER {
+                    return Err(ContractError::CustomError {
+                        val: ("Offer does not exist".to_string()),
+                    });
+                }
+
+                // if the offerer is not the info.sender, then return error
+                if order_components.offerer != info.sender {
+                    return Err(ContractError::Unauthorized {});
+                }
+
+                // we will remove the cancelled offer
+                self.orders.remove(deps.storage, order_key)?;
+
+                Ok(Response::new())
+            }
+            _ => {
+                return Err(ContractError::CustomError {
+                    val: ("Collection offer is not supported".to_string()),
+                });
+            }
+        }
+    }
+
     // function to process payment transfer with royalty
     fn payment_with_royalty(
         &self,
-        deps: DepsMut,
+        deps: &DepsMut,
         _info: MessageInfo,
         nft_contract_address: Addr,
         nft_id: String,
