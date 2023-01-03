@@ -1561,7 +1561,7 @@ mod tests {
             assert_eq!(res.owner, USER_1.to_string());
 
             // query the RoyaltyInfo of the token
-            let res: RoyaltiesInfoResponse = app.wrap().query_wasm_smart(
+            let _res: RoyaltiesInfoResponse = app.wrap().query_wasm_smart(
                 Addr::unchecked(cw2981_address.clone()),
                 &Cw721QueryMsg::Extension{
                     msg: Cw2981QueryMsg::RoyaltyInfo {

@@ -133,12 +133,12 @@ pub struct OrderComponents {
     pub end_time: Option<Expiration>,
 }
 
-pub struct OrderIndexes<'a> {
+pub struct OfferIndexes<'a> {
     pub users: MultiIndex<'a, User, OrderComponents, OrderKey>,
     pub nfts: MultiIndex<'a, Nft, OrderComponents, OrderKey>,
 }
 
-impl<'a> IndexList<OrderComponents> for OrderIndexes<'a> {
+impl<'a> IndexList<OrderComponents> for OfferIndexes<'a> {
     // this method returns a list of all indexes
     fn get_indexes(&'_ self) -> Box<dyn Iterator<Item = &'_ dyn Index<OrderComponents>> + '_> {
         let v: Vec<&dyn Index<OrderComponents>> = vec![&self.users, &self.nfts];
@@ -147,8 +147,8 @@ impl<'a> IndexList<OrderComponents> for OrderIndexes<'a> {
 }
 
 // helper function create a IndexedMap for listings
-pub fn orders<'a>() -> IndexedMap<'a, OrderKey, OrderComponents, OrderIndexes<'a>> {
-    let indexes = OrderIndexes {
+pub fn orders<'a>() -> IndexedMap<'a, OrderKey, OrderComponents, OfferIndexes<'a>> {
+    let indexes = OfferIndexes {
         users: MultiIndex::new(
             |_pk: &[u8], l: &OrderComponents| (l.order_id.0.clone()),
             "users",

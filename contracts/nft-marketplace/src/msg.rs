@@ -55,6 +55,9 @@ pub enum ExecuteMsg {
         contract_address: String,
         token_id: Option<String>,
     },
+    // Cancel all offer of User
+    CancelAllOffer {
+    },
 }
 
 #[cw_serde]
@@ -91,6 +94,7 @@ pub enum QueryMsg {
     Offers {
         item: Option<Asset>,
         offerer: Option<String>,
+        limit: Option<u32>,
     },
 }
 

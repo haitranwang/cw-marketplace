@@ -119,6 +119,13 @@ pub fn execute(
                 api.addr_validate(&contract_address)?,
                 token_id,
             ),
+        ExecuteMsg::CancelAllOffer {
+        } => contract()
+            .execute_cancel_all_offer(
+                deps,
+                _env,
+                info,
+            ),
     }
 }
 
@@ -159,10 +166,11 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
             code_id,
             auction_config,
         )?),
-        QueryMsg::Offers { item, offerer } => to_binary(&contract().query_offers(
+        QueryMsg::Offers { item, offerer, limit } => to_binary(&contract().query_offers(
             deps,
             item,
             offerer,
+            limit,
         )?),
     }
 }

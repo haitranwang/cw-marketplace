@@ -7,7 +7,7 @@ use cw20::{AllowanceResponse, Expiration};
 use cw20_base::allowances::query_allowance;
 use cw20_base::contract::{create_accounts, query as cw20_query, execute_update_minter};
 use cw20_base::msg::{ExecuteMsg, QueryMsg};
-use cw20_base::state::{MinterData, TokenInfo, TOKEN_INFO, BALANCES, ALLOWANCES};
+use cw20_base::state::{MinterData, TokenInfo, TOKEN_INFO, BALANCES};
 use cw20_base::ContractError;
 
 use crate::state::{ InstantiateMsg, MarketplaceInfo, MARKETPLACE_INFO };

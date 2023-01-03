@@ -3,7 +3,7 @@ use cw_storage_plus::Bound;
 
 use crate::{
     msg::{ListingsResponse, OffersResponse},
-    state::{listing_key, AuctionConfig, Listing, ListingKey, MarketplaceContract}, order_state::{Asset, order_key, OrderType, OrderKey},
+    state::{listing_key, AuctionConfig, Listing, ListingKey, MarketplaceContract}, order_state::{Asset, order_key, OrderType},
 };
 
 impl MarketplaceContract<'static> {
@@ -77,6 +77,7 @@ impl MarketplaceContract<'static> {
         deps: Deps,
         item: Option<Asset>,
         offerer: Option<String>,
+        limit: Option<u32>,
     ) -> StdResult<OffersResponse>{
         // if both item and offerer are exist, this is a query for a specific offer
         if let (Some(item), Some(offerer)) = (item.clone(), offerer.clone()) {
@@ -88,7 +89,7 @@ impl MarketplaceContract<'static> {
                     // generate order key
                     let order_key = order_key(&deps.api.addr_validate(&offerer.to_string()).unwrap(), &nft_address, &token_id);
                     // load order
-                    let order = self.orders.load(deps.storage, order_key)?;
+                    let order = self.offers.load(deps.storage, order_key)?;
 
                     // if the type of order is not offer, return error
                     if order.order_type != OrderType::OFFER {
@@ -105,6 +106,7 @@ impl MarketplaceContract<'static> {
         }
         // if there is only item, this is a query for all offer related a specific item
         else if let Some(item) = item.clone() {
+            let limit = limit.unwrap_or(30).min(30) as usize;
             // match type of item
             match item {
                 Asset::Nft { nft_address, token_id  } => {
@@ -112,16 +114,11 @@ impl MarketplaceContract<'static> {
                     let token_id = token_id.ok_or(StdError::generic_err("Token id is required"))?;
 
                     // load order
-                    let orders = self.orders.idx.nfts
+                    let orders = self.offers.idx.nfts
                         .prefix((nft_address, token_id))
                         .range(deps.storage, None, None, Order::Descending)
-                        .filter( | item | {
-                            match item {
-                                Ok((_, order)) => order.order_type == OrderType::OFFER,
-                                Err(_) => false
-                            }
-                        })
                         .map(|item| item.map(|(_, order)| order))
+                        .take(limit)
                         .collect::<StdResult<Vec<_>>>()?;
                     // return offer
                     Ok(OffersResponse { offers: orders })
@@ -133,17 +130,13 @@ impl MarketplaceContract<'static> {
         }
         // if there is only offerer, this is a query for all offer related a specific offerer
         else if let Some(offerer) = offerer.clone() {
+            let limit = limit.unwrap_or(30).min(30) as usize;
             // load order
-            let orders = self.orders.idx.users
+            let orders = self.offers.idx.users
                 .prefix(deps.api.addr_validate(&offerer.to_string())?)
                 .range(deps.storage, None, None, Order::Descending)
-                .filter( | item | {
-                    match item {
-                        Ok((_, order)) => order.order_type == OrderType::OFFER,
-                        Err(_) => false
-                    }
-                })
                 .map(|item| item.map(|(_, order)| order))
+                .take(limit)
                 .collect::<StdResult<Vec<_>>>()?;
             // return offer
             Ok(OffersResponse { offers: orders })
