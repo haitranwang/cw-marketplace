@@ -486,7 +486,7 @@ impl MarketplaceContract<'static> {
                         let offer_item = offer_item(
                             &ItemType::CW20,
                             &Asset::Cw20 {
-                                token_address: token_address.clone(),
+                                token_address: token_address,
                                 amount,
                             },
                             &0u128,
@@ -497,7 +497,7 @@ impl MarketplaceContract<'static> {
                         let consideration_item = consideration_item(
                             &ItemType::CW721,
                             &Asset::Nft {
-                                nft_address: contract_address.clone(),
+                                nft_address: contract_address,
                                 token_id: Some(token_id),
                             },
                             &0u128,
@@ -509,7 +509,7 @@ impl MarketplaceContract<'static> {
                         let order_offer = OrderComponents {
                             order_type: OrderType::OFFER, // The type of offer must be OFFER
                             order_id: order_key.clone(),
-                            offerer: info.sender.clone(),
+                            offerer: info.sender,
                             offer: [offer_item].to_vec(),
                             consideration: [consideration_item].to_vec(),
                             start_time: None,
@@ -519,7 +519,7 @@ impl MarketplaceContract<'static> {
                         // we will override the order if it already exists
                         let new_offer = self.offers.update(
                             deps.storage,
-                            order_key.clone(),
+                            order_key,
                             |_old| -> Result<OrderComponents, ContractError> { Ok(order_offer) },
                         )?;
 
@@ -527,28 +527,28 @@ impl MarketplaceContract<'static> {
                         let consideration_str = serde_json::to_string(&new_offer.consideration);
 
                         // return success
-                        return Ok(Response::new()
+                        Ok(Response::new()
                             .add_attribute("method", "offer_nft")
                             .add_attribute("order_type", "OFFER")
                             .add_attribute("offerer", new_offer.offerer)
                             .add_attribute("offer", offer_str.unwrap())
                             .add_attribute("consideration", consideration_str.unwrap())
-                            .add_attribute("end_time", new_offer.end_time.unwrap().to_string()));
+                            .add_attribute("end_time", new_offer.end_time.unwrap().to_string()))
                     }
                     // if the token_id is not exist, then this order is offer for a collection of nft
                     // we will handle this in the next version => return error for now
                     None => {
-                        return Err(ContractError::CustomError {
+                        Err(ContractError::CustomError {
                             val: ("Collection offer is not supported".to_string()),
-                        });
+                        })
                     }
                 }
             }
             // we ignore the other type of funds and return error for now
             _ => {
-                return Err(ContractError::CustomError {
+                Err(ContractError::CustomError {
                     val: ("Invalid Offer funds".to_string()),
-                });
+                })
             }
         }
     }
@@ -624,7 +624,7 @@ impl MarketplaceContract<'static> {
                                     token_id.as_ref().unwrap().clone(),
                                     payment_item.clone(),
                                     offerer,
-                                    info.sender.clone(),
+                                    info.sender,
                                 );
 
                                 // loop through all payment messages and add item to response to execute
@@ -664,18 +664,18 @@ impl MarketplaceContract<'static> {
                     }
                     // if the consideration item is not Nft, then return error
                     _ => {
-                        return Err(ContractError::CustomError {
+                        Err(ContractError::CustomError {
                             val: ("Consideration is not NFT".to_string()),
-                        });
+                        })
                     }
                 }
             }
             // if the token_id is not exist, then this order is offer for a collection of nft
             // we will handle this in the next version => return error for now
             None => {
-                return Err(ContractError::CustomError {
+                Err(ContractError::CustomError {
                     val: ("Collection offer is not supported".to_string()),
-                });
+                })
             }
         }
     }
@@ -706,9 +706,9 @@ impl MarketplaceContract<'static> {
                     .add_attribute("cancelled_at", env.block.time.to_string()))
             }
             _ => {
-                return Err(ContractError::CustomError {
+                Err(ContractError::CustomError {
                     val: ("Collection offer is not supported".to_string()),
-                });
+                })
             }
         }
     }
@@ -767,8 +767,8 @@ impl MarketplaceContract<'static> {
         // get cw2981 royalties info
         let royalty_query_msg = Cw2981QueryMsg::Extension {
             msg: cw2981_royalties::msg::Cw2981QueryMsg::RoyaltyInfo {
-                token_id: nft_id.clone(),
-                sale_price: Uint128::from(amount.clone()),
+                token_id: nft_id,
+                sale_price: Uint128::from(amount),
             },
         };
 
@@ -809,7 +809,7 @@ impl MarketplaceContract<'static> {
                         msg: to_binary(&Cw20ExecuteMsg::TransferFrom {
                             owner: sender.to_string(),
                             recipient: receipient.to_string(),
-                            amount: amount.clone(),
+                            amount: amount,
                         })
                         .unwrap(),
                         funds: vec![],
@@ -821,8 +821,8 @@ impl MarketplaceContract<'static> {
                     let transfer_response = BankMsg::Send {
                         to_address: receipient.to_string(),
                         amount: vec![Coin {
-                            denom: token_info.clone(),
-                            amount: amount.clone(),
+                            denom: token_info,
+                            amount: amount,
                         }],
                     };
                     res_messages.push(transfer_response.into());
@@ -837,7 +837,7 @@ impl MarketplaceContract<'static> {
                         msg: to_binary(&Cw20ExecuteMsg::TransferFrom {
                             owner: sender.to_string(),
                             recipient: creator.unwrap().to_string(),
-                            amount: royalty_amount.clone().unwrap(),
+                            amount: royalty_amount.unwrap(),
                         })
                         .unwrap(),
                         funds: vec![],
@@ -872,7 +872,7 @@ impl MarketplaceContract<'static> {
                     let transfer_token_seller_msg = BankMsg::Send {
                         to_address: receipient.to_string(),
                         amount: vec![Coin {
-                            denom: token_info.clone(),
+                            denom: token_info,
                             amount: amount - royalty_amount.unwrap(),
                         }],
                     };
@@ -881,6 +881,6 @@ impl MarketplaceContract<'static> {
             }
         }
 
-        return res_messages;
+        res_messages
     }
 }

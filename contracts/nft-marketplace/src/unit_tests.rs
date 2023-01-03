@@ -924,7 +924,7 @@ mod tests {
         let msg = ExecuteMsg::AcceptNftOffer {
             offerer: offerer.to_string(),
             contract_address: contract_address.to_string(),
-            token_id: token_id.clone(),
+            token_id: token_id,
         };
         let info = mock_info(sender, &coins(1000, "uaura"));
         execute(deps, mock_env(), info, msg)
@@ -1167,7 +1167,7 @@ mod tests {
                     recipient: USER_1.to_string(),
                     amount: Uint128::from(100000000u128),
                 },
-                &vec![Coin {
+                &[Coin {
                     amount: Uint128::from(100000000u128),
                     denom: NATIVE_DENOM_2.to_string(),
                 }],
@@ -1181,7 +1181,7 @@ mod tests {
             let balance: BalanceResponse = app
                 .wrap()
                 .query_wasm_smart(
-                    cw20_address.clone(),
+                    cw20_address,
                     &cw20::Cw20QueryMsg::Balance {
                         address: USER_1.to_string(),
                     },
@@ -1229,7 +1229,7 @@ mod tests {
                     recipient: USER_1.to_string(),
                     amount: Uint128::from(100000001u128),
                 },
-                &vec![Coin {
+                &[Coin {
                     amount: Uint128::from(100000000u128),
                     denom: NATIVE_DENOM.to_string(),
                 }],
@@ -1243,7 +1243,7 @@ mod tests {
             let balance: BalanceResponse = app
                 .wrap()
                 .query_wasm_smart(
-                    cw20_address.clone(),
+                    cw20_address,
                     &cw20::Cw20QueryMsg::Balance {
                         address: USER_1.to_string(),
                     },
@@ -1300,7 +1300,7 @@ mod tests {
                     recipient: USER_1.to_string(),
                     amount: Uint128::from(100000000u128),
                 },
-                &vec![Coin {
+                &[Coin {
                     amount: Uint128::from(100000000u128),
                     denom: NATIVE_DENOM.to_string(),
                 }],
@@ -1321,7 +1321,7 @@ mod tests {
 
             // query balance of native token in twilight token contract
             let req: QueryRequest<BankQuery> = QueryRequest::Bank(BankQuery::Balance {
-                address: cw20_address.to_string(),
+                address: cw20_address,
                 denom: NATIVE_DENOM.to_string(),
             });
             let res = app.raw_query(&to_binary(&req).unwrap()).unwrap().unwrap();
@@ -1356,7 +1356,7 @@ mod tests {
                     recipient: USER_1.to_string(),
                     amount: Uint128::from(100000000u128),
                 },
-                &vec![Coin {
+                &[Coin {
                     amount: Uint128::from(100000000u128),
                     denom: NATIVE_DENOM.to_string(),
                 }],
@@ -1382,7 +1382,7 @@ mod tests {
                 &cw20::Cw20ExecuteMsg::Burn {
                     amount: Uint128::from(50000000u128),
                 },
-                &vec![],
+                &[],
             );
             assert!(response.is_ok());
 
@@ -1390,7 +1390,7 @@ mod tests {
             let balance: BalanceResponse = app
                 .wrap()
                 .query_wasm_smart(
-                    cw20_address.clone(),
+                    cw20_address,
                     &cw20::Cw20QueryMsg::Balance {
                         address: USER_1.to_string(),
                     },
@@ -1504,7 +1504,7 @@ mod tests {
                     recipient: USER_1.to_string(),
                     amount: Uint128::from(100000000u128),
                 },
-                &vec![Coin {
+                &[Coin {
                     amount: Uint128::from(100000000u128),
                     denom: NATIVE_DENOM.to_string(),
                 }],
@@ -1576,7 +1576,7 @@ mod tests {
             // owner (ADMIN) accepts offer
             let res = app.execute_contract(
                 Addr::unchecked(ADMIN),
-                Addr::unchecked(marketplace_address.clone()),
+                Addr::unchecked(marketplace_address),
                 &accept_offer_msg,
                 &[],
             );
@@ -1599,7 +1599,7 @@ mod tests {
             let _res: RoyaltiesInfoResponse = app
                 .wrap()
                 .query_wasm_smart(
-                    Addr::unchecked(cw2981_address.clone()),
+                    Addr::unchecked(cw2981_address),
                     &Cw721QueryMsg::Extension {
                         msg: Cw2981QueryMsg::RoyaltyInfo {
                             token_id: MOCK_OFFER_NFT_TOKEN_ID_1.to_string(),
@@ -1613,7 +1613,7 @@ mod tests {
             let res: BalanceResponse = app
                 .wrap()
                 .query_wasm_smart(
-                    Addr::unchecked(cw20_address.clone()),
+                    Addr::unchecked(cw20_address),
                     &Cw20QueryMsg::Balance {
                         address: ADMIN.to_string(),
                     },

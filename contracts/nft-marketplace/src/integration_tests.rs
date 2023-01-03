@@ -50,11 +50,11 @@ pub mod env {
                     vec![
                         Coin {
                             denom: NATIVE_DENOM.to_string(),
-                            amount: Uint128::new(NATIVE_BALANCE.into()),
+                            amount: Uint128::new(NATIVE_BALANCE),
                         },
                         Coin {
                             denom: NATIVE_DENOM_2.to_string(),
-                            amount: Uint128::new(NATIVE_BALANCE_2.into()),
+                            amount: Uint128::new(NATIVE_BALANCE_2),
                         },
                     ],
                 )

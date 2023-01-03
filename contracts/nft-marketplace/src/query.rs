@@ -89,10 +89,10 @@ impl MarketplaceContract<'static> {
                     token_id,
                 } => {
                     // if token_is is not exist, return error
-                    let token_id = token_id.ok_or(StdError::generic_err("Token id is required"))?;
+                    let token_id = token_id.ok_or_else(|| StdError::generic_err("Token id is required"))?;
                     // generate order key
                     let order_key = order_key(
-                        &deps.api.addr_validate(&offerer.to_string()).unwrap(),
+                        &deps.api.addr_validate(&offerer).unwrap(),
                         &nft_address,
                         &token_id,
                     );
@@ -105,17 +105,17 @@ impl MarketplaceContract<'static> {
                     }
 
                     // return offer
-                    return Ok(OffersResponse {
+                    Ok(OffersResponse {
                         offers: vec![order],
-                    });
+                    })
                 }
                 _ => {
-                    return Err(StdError::generic_err("Unsupported asset type"));
+                    Err(StdError::generic_err("Unsupported asset type"))
                 }
             }
         }
         // if there is only item, this is a query for all offer related a specific item
-        else if let Some(item) = item.clone() {
+        else if let Some(item) = item {
             let limit = limit.unwrap_or(30).min(30) as usize;
             // match type of item
             match item {
@@ -124,7 +124,7 @@ impl MarketplaceContract<'static> {
                     token_id,
                 } => {
                     // if token_is is not exist, return error
-                    let token_id = token_id.ok_or(StdError::generic_err("Token id is required"))?;
+                    let token_id = token_id.ok_or_else(|| StdError::generic_err("Token id is required"))?;
 
                     // load order
                     let orders = self
@@ -140,19 +140,19 @@ impl MarketplaceContract<'static> {
                     Ok(OffersResponse { offers: orders })
                 }
                 _ => {
-                    return Err(StdError::generic_err("Unsupported asset type"));
+                    Err(StdError::generic_err("Unsupported asset type"))
                 }
             }
         }
         // if there is only offerer, this is a query for all offer related a specific offerer
-        else if let Some(offerer) = offerer.clone() {
+        else if let Some(offerer) = offerer {
             let limit = limit.unwrap_or(30).min(30) as usize;
             // load order
             let orders = self
                 .offers
                 .idx
                 .users
-                .prefix(deps.api.addr_validate(&offerer.to_string())?)
+                .prefix(deps.api.addr_validate(&offerer)?)
                 .range(deps.storage, None, None, Order::Descending)
                 .map(|item| item.map(|(_, order)| order))
                 .take(limit)
@@ -162,7 +162,7 @@ impl MarketplaceContract<'static> {
         }
         // aleast one of item and offerer must be exist
         else {
-            return Err(StdError::generic_err("Item or offerer is required"));
+            Err(StdError::generic_err("Item or offerer is required"))
         }
     }
 }

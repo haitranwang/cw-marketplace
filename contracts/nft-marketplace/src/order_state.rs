@@ -80,8 +80,8 @@ pub fn offer_item(
     OfferItem {
         item_type: item_type.clone(),
         item: item.clone(),
-        start_amount: start_amount.clone(),
-        end_amount: end_amount.clone(),
+        start_amount: *start_amount,
+        end_amount: *end_amount,
     }
 }
 
@@ -104,8 +104,8 @@ pub fn consideration_item(
     ConsiderationItem {
         item_type: item_type.clone(),
         item: item.clone(),
-        start_amount: start_amount.clone(),
-        end_amount: end_amount.clone(),
+        start_amount: *start_amount,
+        end_amount: *end_amount,
         recipient: recipient.clone(),
     }
 }
@@ -114,10 +114,10 @@ pub fn consideration_item(
 // !DO NOT change the order of the fields
 pub type OrderKey = (User, Nft);
 
-pub fn order_key(user_address: &Addr, contract_address: &Addr, token_id: &String) -> OrderKey {
+pub fn order_key(user_address: &Addr, contract_address: &Addr, token_id: &str) -> OrderKey {
     (
         user_address.clone(),
-        (contract_address.clone(), token_id.clone()),
+        (contract_address.clone(), token_id.to_owned()),
     )
 }
 
