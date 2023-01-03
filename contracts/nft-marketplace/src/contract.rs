@@ -85,47 +85,38 @@ pub fn execute(
             token_id,
             funds,
             end_time,
-        } => contract()
-            .execute_offer_nft(
-                deps,
-                _env,
-                info,
-                api.addr_validate(&contract_address)?,
-                token_id,
-                funds,
-                end_time,
-            ),
+        } => contract().execute_offer_nft(
+            deps,
+            _env,
+            info,
+            api.addr_validate(&contract_address)?,
+            token_id,
+            funds,
+            end_time,
+        ),
         ExecuteMsg::AcceptNftOffer {
-            offerer, 
-            contract_address, 
-            token_id 
-        } => contract()
-            .execute_accept_nft_offer(
-                deps,
-                _env,
-                info,
-                api.addr_validate(&offerer)?,
-                api.addr_validate(&contract_address)?,
-                token_id,
-            ),
+            offerer,
+            contract_address,
+            token_id,
+        } => contract().execute_accept_nft_offer(
+            deps,
+            _env,
+            info,
+            api.addr_validate(&offerer)?,
+            api.addr_validate(&contract_address)?,
+            token_id,
+        ),
         ExecuteMsg::CancelNftOffer {
-            contract_address, 
-            token_id 
-        } => contract()
-            .execute_cancel_nft_offer(
-                deps,
-                _env,
-                info,
-                api.addr_validate(&contract_address)?,
-                token_id,
-            ),
-        ExecuteMsg::CancelAllOffer {
-        } => contract()
-            .execute_cancel_all_offer(
-                deps,
-                _env,
-                info,
-            ),
+            contract_address,
+            token_id,
+        } => contract().execute_cancel_nft_offer(
+            deps,
+            _env,
+            info,
+            api.addr_validate(&contract_address)?,
+            token_id,
+        ),
+        ExecuteMsg::CancelAllOffer {} => contract().execute_cancel_all_offer(deps, _env, info),
     }
 }
 
@@ -166,11 +157,10 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
             code_id,
             auction_config,
         )?),
-        QueryMsg::Offers { item, offerer, limit } => to_binary(&contract().query_offers(
-            deps,
+        QueryMsg::Offers {
             item,
             offerer,
             limit,
-        )?),
+        } => to_binary(&contract().query_offers(deps, item, offerer, limit)?),
     }
 }

@@ -1,9 +1,10 @@
-use cosmwasm_std::{Addr, Deps, Order, StdResult, StdError};
+use cosmwasm_std::{Addr, Deps, Order, StdError, StdResult};
 use cw_storage_plus::Bound;
 
 use crate::{
     msg::{ListingsResponse, OffersResponse},
-    state::{listing_key, AuctionConfig, Listing, ListingKey, MarketplaceContract}, order_state::{Asset, order_key, OrderType},
+    order_state::{order_key, Asset, OrderType},
+    state::{listing_key, AuctionConfig, Listing, ListingKey, MarketplaceContract},
 };
 
 impl MarketplaceContract<'static> {
@@ -78,16 +79,23 @@ impl MarketplaceContract<'static> {
         item: Option<Asset>,
         offerer: Option<String>,
         limit: Option<u32>,
-    ) -> StdResult<OffersResponse>{
+    ) -> StdResult<OffersResponse> {
         // if both item and offerer are exist, this is a query for a specific offer
         if let (Some(item), Some(offerer)) = (item.clone(), offerer.clone()) {
             // match type of item
             match item {
-                Asset::Nft { nft_address, token_id  } => {
+                Asset::Nft {
+                    nft_address,
+                    token_id,
+                } => {
                     // if token_is is not exist, return error
                     let token_id = token_id.ok_or(StdError::generic_err("Token id is required"))?;
                     // generate order key
-                    let order_key = order_key(&deps.api.addr_validate(&offerer.to_string()).unwrap(), &nft_address, &token_id);
+                    let order_key = order_key(
+                        &deps.api.addr_validate(&offerer.to_string()).unwrap(),
+                        &nft_address,
+                        &token_id,
+                    );
                     // load order
                     let order = self.offers.load(deps.storage, order_key)?;
 
@@ -97,7 +105,9 @@ impl MarketplaceContract<'static> {
                     }
 
                     // return offer
-                    return Ok(OffersResponse { offers: vec![order] });
+                    return Ok(OffersResponse {
+                        offers: vec![order],
+                    });
                 }
                 _ => {
                     return Err(StdError::generic_err("Unsupported asset type"));
@@ -109,12 +119,18 @@ impl MarketplaceContract<'static> {
             let limit = limit.unwrap_or(30).min(30) as usize;
             // match type of item
             match item {
-                Asset::Nft { nft_address, token_id  } => {
+                Asset::Nft {
+                    nft_address,
+                    token_id,
+                } => {
                     // if token_is is not exist, return error
                     let token_id = token_id.ok_or(StdError::generic_err("Token id is required"))?;
 
                     // load order
-                    let orders = self.offers.idx.nfts
+                    let orders = self
+                        .offers
+                        .idx
+                        .nfts
                         .prefix((nft_address, token_id))
                         .range(deps.storage, None, None, Order::Descending)
                         .map(|item| item.map(|(_, order)| order))
@@ -132,7 +148,10 @@ impl MarketplaceContract<'static> {
         else if let Some(offerer) = offerer.clone() {
             let limit = limit.unwrap_or(30).min(30) as usize;
             // load order
-            let orders = self.offers.idx.users
+            let orders = self
+                .offers
+                .idx
+                .users
                 .prefix(deps.api.addr_validate(&offerer.to_string())?)
                 .range(deps.storage, None, None, Order::Descending)
                 .map(|item| item.map(|(_, order)| order))

@@ -1,7 +1,7 @@
 use cosmwasm_schema::cw_serde;
 use cosmwasm_std::Addr;
 use cw20::Expiration;
-use cw_storage_plus::{MultiIndex, IndexList, Index, IndexedMap};
+use cw_storage_plus::{Index, IndexList, IndexedMap, MultiIndex};
 
 pub type Nft = (Addr, String);
 pub type User = Addr;
@@ -30,21 +30,21 @@ pub enum Asset {
 
 #[cw_serde]
 pub enum PaymentAsset {
-    Native {
-        denom: String,
-        amount: u128,
-    },
-    Cw20 {
-        token_address: Addr,
-        amount: u128,
-    },
+    Native { denom: String, amount: u128 },
+    Cw20 { token_address: Addr, amount: u128 },
 }
 
 impl From<Asset> for PaymentAsset {
     fn from(asset: Asset) -> Self {
         match asset {
             Asset::Native { denom, amount } => PaymentAsset::Native { denom, amount },
-            Asset::Cw20 { token_address, amount } => PaymentAsset::Cw20 { token_address, amount },
+            Asset::Cw20 {
+                token_address,
+                amount,
+            } => PaymentAsset::Cw20 {
+                token_address,
+                amount,
+            },
             _ => panic!("Asset is not a payment asset"),
         }
     }
@@ -53,14 +53,14 @@ impl From<Asset> for PaymentAsset {
 #[cw_serde]
 pub enum Side {
     OFFER,
-    CONSIDERATION
+    CONSIDERATION,
 }
 
 #[cw_serde]
 pub enum ItemType {
     NATIVE,
     CW20,
-    CW721
+    CW721,
 }
 
 #[cw_serde]
@@ -71,11 +71,11 @@ pub struct OfferItem {
     pub end_amount: u128,
 }
 
-pub fn offer_item (
+pub fn offer_item(
     item_type: &ItemType,
     item: &Asset,
     start_amount: &u128,
-    end_amount: &u128
+    end_amount: &u128,
 ) -> OfferItem {
     OfferItem {
         item_type: item_type.clone(),
@@ -94,12 +94,12 @@ pub struct ConsiderationItem {
     pub recipient: Addr,
 }
 
-pub fn consideration_item (
+pub fn consideration_item(
     item_type: &ItemType,
     item: &Asset,
     start_amount: &u128,
     end_amount: &u128,
-    recipient: &Addr
+    recipient: &Addr,
 ) -> ConsiderationItem {
     ConsiderationItem {
         item_type: item_type.clone(),
@@ -114,12 +114,11 @@ pub fn consideration_item (
 // !DO NOT change the order of the fields
 pub type OrderKey = (User, Nft);
 
-pub fn order_key(
-    user_address: &Addr, 
-    contract_address: &Addr, 
-    token_id: &String
-) -> OrderKey {
-    (user_address.clone(), (contract_address.clone(), token_id.clone()))
+pub fn order_key(user_address: &Addr, contract_address: &Addr, token_id: &String) -> OrderKey {
+    (
+        user_address.clone(),
+        (contract_address.clone(), token_id.clone()),
+    )
 }
 
 #[cw_serde]

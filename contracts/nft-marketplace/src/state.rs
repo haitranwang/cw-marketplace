@@ -3,7 +3,7 @@ use cosmwasm_std::{Addr, BlockInfo, Coin};
 use cw721::Expiration;
 use cw_storage_plus::{Index, IndexList, IndexedMap, Item, MultiIndex, UniqueIndex};
 
-use crate::order_state::{OrderKey, OrderComponents, OfferIndexes, orders};
+use crate::order_state::{orders, OfferIndexes, OrderComponents, OrderKey};
 
 #[cw_serde]
 pub enum AuctionConfig {
@@ -148,7 +148,7 @@ pub struct MarketplaceContract<'a> {
     pub listings: IndexedMap<'a, ListingKey, Listing, ListingIndexes<'a>>,
     pub auction_contracts:
         IndexedMap<'a, AuctionContractKey, AuctionContract, AuctionContractIndexes<'a>>,
-    
+
     // Implement Odering style
     pub offers: IndexedMap<'a, OrderKey, OrderComponents, OfferIndexes<'a>>,
 }

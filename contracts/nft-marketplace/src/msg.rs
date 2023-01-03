@@ -2,7 +2,10 @@ use cosmwasm_schema::{cw_serde, QueryResponses};
 use cosmwasm_std::Addr;
 use cw20::Expiration;
 
-use crate::{state::{AuctionConfig, AuctionContract, Listing}, order_state::{Asset, OrderComponents}};
+use crate::{
+    order_state::{Asset, OrderComponents},
+    state::{AuctionConfig, AuctionContract, Listing},
+};
 
 #[cw_serde]
 pub struct InstantiateMsg {
@@ -56,8 +59,7 @@ pub enum ExecuteMsg {
         token_id: Option<String>,
     },
     // Cancel all offer of User
-    CancelAllOffer {
-    },
+    CancelAllOffer {},
 }
 
 #[cw_serde]

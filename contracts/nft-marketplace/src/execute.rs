@@ -1,15 +1,24 @@
-use cosmwasm_std::{
-    to_binary, Addr, BankMsg, Coin, DepsMut, Env, MessageInfo, QueryRequest, Response, StdResult,
-    Uint128, WasmMsg, WasmQuery, CosmosMsg, Order,
+use crate::order_state::{
+    consideration_item, offer_item, order_key, Asset, ItemType, OrderComponents, OrderType,
+    PaymentAsset,
 };
-use cw20::{ AllowanceResponse, Cw20ExecuteMsg, Cw20QueryMsg, BalanceResponse, Expiration as Cw20Expiration };
-use cw2981_royalties::{msg::RoyaltiesInfoResponse, ExecuteMsg as Cw2981ExecuteMsg, QueryMsg as Cw2981QueryMsg};
-use cw721::{Cw721QueryMsg, Expiration as Cw721Expiration};
-use crate::order_state::{Asset, ItemType, OrderComponents, OrderType, consideration_item, offer_item, order_key, PaymentAsset};
 use crate::{
-    state::{AuctionContract, listing_key, AuctionConfig, Listing, ListingStatus, MarketplaceContract},
+    state::{
+        listing_key, AuctionConfig, AuctionContract, Listing, ListingStatus, MarketplaceContract,
+    },
     ContractError,
 };
+use cosmwasm_std::{
+    to_binary, Addr, BankMsg, Coin, CosmosMsg, DepsMut, Env, MessageInfo, Order, QueryRequest,
+    Response, StdResult, Uint128, WasmMsg, WasmQuery,
+};
+use cw20::{
+    AllowanceResponse, BalanceResponse, Cw20ExecuteMsg, Cw20QueryMsg, Expiration as Cw20Expiration,
+};
+use cw2981_royalties::{
+    msg::RoyaltiesInfoResponse, ExecuteMsg as Cw2981ExecuteMsg, QueryMsg as Cw2981QueryMsg,
+};
+use cw721::{Cw721QueryMsg, Expiration as Cw721Expiration};
 
 impl MarketplaceContract<'static> {
     pub fn validate_auction_config(&self, auction_config: &AuctionConfig) -> bool {
@@ -402,16 +411,21 @@ impl MarketplaceContract<'static> {
         // ***********
         match funds {
             // the funds must be cw20 token
-            Asset::Cw20 {token_address, amount} => {
+            Asset::Cw20 {
+                token_address,
+                amount,
+            } => {
                 // check that the allowance of the cw20 offer token is enough
-                let allowance_response: AllowanceResponse = 
-                    deps.querier.query_wasm_smart(
-                        &token_address, 
+                let allowance_response: AllowanceResponse = deps
+                    .querier
+                    .query_wasm_smart(
+                        &token_address,
                         &Cw20QueryMsg::Allowance {
                             owner: info.sender.to_string(),
                             spender: env.contract.address.to_string(),
-                        }
-                    ).unwrap();
+                        },
+                    )
+                    .unwrap();
 
                 // check if the allowance is greater or equal the offer amount
                 if allowance_response.allowance < Uint128::from(amount) {
@@ -419,12 +433,15 @@ impl MarketplaceContract<'static> {
                 }
 
                 // check that the balance of the cw20 offer token is enough
-                let balance_response: BalanceResponse = 
-                    deps.querier.query_wasm_smart(
-                        &token_address, 
+                let balance_response: BalanceResponse = deps
+                    .querier
+                    .query_wasm_smart(
+                        &token_address,
                         &Cw20QueryMsg::Balance {
                             address: info.sender.to_string(),
-                    }).unwrap();
+                        },
+                    )
+                    .unwrap();
 
                 // if the balance is smaller the offer amount, return error
                 if balance_response.balance < Uint128::from(amount) {
@@ -444,8 +461,9 @@ impl MarketplaceContract<'static> {
                                 &Cw721QueryMsg::OwnerOf {
                                     token_id: token_id.clone(),
                                     include_expired: Some(false),
-                                });
-                        
+                                },
+                            );
+
                         match owner_response {
                             Ok(owner) => {
                                 if owner.owner == info.sender {
@@ -467,15 +485,21 @@ impl MarketplaceContract<'static> {
                         // the offer item will contain the infomation of cw20 token
                         let offer_item = offer_item(
                             &ItemType::CW20,
-                            &Asset::Cw20 { token_address: token_address.clone(), amount },
+                            &Asset::Cw20 {
+                                token_address: token_address.clone(),
+                                amount,
+                            },
                             &0u128,
-                            &0u128
+                            &0u128,
                         );
 
                         // the consideration item will contain the infomation of nft
                         let consideration_item = consideration_item(
                             &ItemType::CW721,
-                            &Asset::Nft { nft_address: contract_address.clone(), token_id: Some(token_id) },
+                            &Asset::Nft {
+                                nft_address: contract_address.clone(),
+                                token_id: Some(token_id),
+                            },
                             &0u128,
                             &0u128,
                             &info.sender,
@@ -483,7 +507,7 @@ impl MarketplaceContract<'static> {
 
                         // generate order components
                         let order_offer = OrderComponents {
-                            order_type: OrderType::OFFER,                   // The type of offer must be OFFER
+                            order_type: OrderType::OFFER, // The type of offer must be OFFER
                             order_id: order_key.clone(),
                             offerer: info.sender.clone(),
                             offer: [offer_item].to_vec(),
@@ -509,8 +533,7 @@ impl MarketplaceContract<'static> {
                             .add_attribute("offerer", new_offer.offerer)
                             .add_attribute("offer", offer_str.unwrap())
                             .add_attribute("consideration", consideration_str.unwrap())
-                            .add_attribute("end_time", new_offer.end_time.unwrap().to_string())
-                        )
+                            .add_attribute("end_time", new_offer.end_time.unwrap().to_string()));
                     }
                     // if the token_id is not exist, then this order is offer for a collection of nft
                     // we will handle this in the next version => return error for now
@@ -520,7 +543,6 @@ impl MarketplaceContract<'static> {
                         });
                     }
                 }
-                
             }
             // we ignore the other type of funds and return error for now
             _ => {
@@ -559,32 +581,42 @@ impl MarketplaceContract<'static> {
 
                 match &order_components.consideration[0].item {
                     // match if the consideration item is Nft
-                    Asset::Nft { nft_address, token_id } => {
+                    Asset::Nft {
+                        nft_address,
+                        token_id,
+                    } => {
                         // query the owner of the nft
-                        let owner: cw721::OwnerOfResponse =
-                            deps.querier.query_wasm_smart(
+                        let owner: cw721::OwnerOfResponse = deps
+                            .querier
+                            .query_wasm_smart(
                                 &contract_address,
                                 &Cw721QueryMsg::OwnerOf {
                                     token_id: token_id.clone().unwrap(),
                                     include_expired: Some(false),
-                                }).unwrap();
-                        
+                                },
+                            )
+                            .unwrap();
+
                         // if the nft is not belong to the info.sender, then return error
                         if owner.owner != info.sender {
                             return Err(ContractError::Unauthorized {});
                         }
-                            
-                        let mut res: Response<> = Response::new();
+
+                        let mut res: Response = Response::new();
 
                         // ***********************
                         // TRANSFER CW20 TO SENDER
                         // ***********************
                         // convert Asset to PaymentAsset
-                        let payment_item = PaymentAsset::from(order_components.offer[0].item.clone());
+                        let payment_item =
+                            PaymentAsset::from(order_components.offer[0].item.clone());
 
                         // execute cw20 transfer msg from offerer to info.sender
                         match &payment_item {
-                            PaymentAsset::Cw20 { token_address: _, amount: _ } => {
+                            PaymentAsset::Cw20 {
+                                token_address: _,
+                                amount: _,
+                            } => {
                                 let payment_messages = self.payment_with_royalty(
                                     &deps,
                                     info.clone(),
@@ -623,12 +655,11 @@ impl MarketplaceContract<'static> {
                         // add transfer nft message to response to execute
                         res = res.add_message(transfer_nft_msg);
 
-                        res = res
-                            .add_attribute("method", "execute_accept_nft_offer");
-                        
+                        res = res.add_attribute("method", "execute_accept_nft_offer");
+
                         // After the offer is accepted, we will delete the order
                         self.offers.remove(deps.storage, order_key)?;
-                        
+
                         Ok(res)
                     }
                     // if the consideration item is not Nft, then return error
@@ -637,7 +668,7 @@ impl MarketplaceContract<'static> {
                             val: ("Consideration is not NFT".to_string()),
                         });
                     }
-                }  
+                }
             }
             // if the token_id is not exist, then this order is offer for a collection of nft
             // we will handle this in the next version => return error for now
@@ -660,7 +691,7 @@ impl MarketplaceContract<'static> {
     ) -> Result<Response, ContractError> {
         match token_id {
             // match if the token_id is exist, then this order is offer for a specific nft
-            Some(token_id) => {                
+            Some(token_id) => {
                 // generate order key based on the sender address, contract address and token id
                 let order_key = order_key(&info.sender, &contract_address, &token_id);
 
@@ -689,7 +720,10 @@ impl MarketplaceContract<'static> {
         info: MessageInfo,
     ) -> Result<Response, ContractError> {
         // get all orders of info.sender
-        let order_keys = self.offers.idx.users
+        let order_keys = self
+            .offers
+            .idx
+            .users
             .prefix(deps.api.addr_validate(&info.sender.to_string())?)
             .range(deps.storage, None, None, Order::Descending)
             .map(|item| item.map(|(key, _)| key))
@@ -717,25 +751,24 @@ impl MarketplaceContract<'static> {
         token: PaymentAsset,
         sender: Addr,
         receipient: Addr,
-    ) -> Vec<CosmosMsg>{
+    ) -> Vec<CosmosMsg> {
         // create empty vector of CosmosMsg
         let mut res_messages: Vec<CosmosMsg> = vec![];
 
         // Extract information from token
         let (is_native, token_info, amount) = match token {
-            PaymentAsset::Cw20 { token_address, amount } => {
-                (false, token_address.to_string(), Uint128::from(amount))
-            }
-            PaymentAsset::Native { denom, amount } => {
-                (true, denom, Uint128::from(amount))
-            }
+            PaymentAsset::Cw20 {
+                token_address,
+                amount,
+            } => (false, token_address.to_string(), Uint128::from(amount)),
+            PaymentAsset::Native { denom, amount } => (true, denom, Uint128::from(amount)),
         };
 
         // get cw2981 royalties info
         let royalty_query_msg = Cw2981QueryMsg::Extension {
             msg: cw2981_royalties::msg::Cw2981QueryMsg::RoyaltyInfo {
                 token_id: nft_id.clone(),
-                sale_price: Uint128::from(amount.clone())
+                sale_price: Uint128::from(amount.clone()),
             },
         };
 
@@ -745,23 +778,22 @@ impl MarketplaceContract<'static> {
                 msg: to_binary(&royalty_query_msg).unwrap(),
             }));
 
-        let (creator, royalty_amount): (Option<Addr>, Option<Uint128>) =
-            match royalty_info_rsp {
-                Ok(RoyaltiesInfoResponse {
-                    address,
-                    royalty_amount,
-                }) => {
-                    if address.is_empty() || royalty_amount == Uint128::zero() {
-                        (None, None)
-                    } else {
-                        (
-                            Some(deps.api.addr_validate(&address).unwrap()),
-                            Some(royalty_amount),
-                        )
-                    }
+        let (creator, royalty_amount): (Option<Addr>, Option<Uint128>) = match royalty_info_rsp {
+            Ok(RoyaltiesInfoResponse {
+                address,
+                royalty_amount,
+            }) => {
+                if address.is_empty() || royalty_amount == Uint128::zero() {
+                    (None, None)
+                } else {
+                    (
+                        Some(deps.api.addr_validate(&address).unwrap()),
+                        Some(royalty_amount),
+                    )
                 }
-                Err(_) => (None, None),
-            };
+            }
+            Err(_) => (None, None),
+        };
 
         // there is no royalty, creator is the receipient, or royalty amount is 0
         if creator == None
@@ -778,7 +810,8 @@ impl MarketplaceContract<'static> {
                             owner: sender.to_string(),
                             recipient: receipient.to_string(),
                             amount: amount.clone(),
-                        }).unwrap(),
+                        })
+                        .unwrap(),
                         funds: vec![],
                     };
                     res_messages.push(transfer_response.into());
@@ -805,7 +838,8 @@ impl MarketplaceContract<'static> {
                             owner: sender.to_string(),
                             recipient: creator.unwrap().to_string(),
                             amount: royalty_amount.clone().unwrap(),
-                        }).unwrap(),
+                        })
+                        .unwrap(),
                         funds: vec![],
                     };
                     res_messages.push(transfer_token_creator_response.into());
@@ -817,7 +851,8 @@ impl MarketplaceContract<'static> {
                             owner: sender.to_string(),
                             recipient: receipient.to_string(),
                             amount: amount - royalty_amount.unwrap(),
-                        }).unwrap(),
+                        })
+                        .unwrap(),
                         funds: vec![],
                     };
                     res_messages.push(transfer_token_seller_msg.into());
@@ -844,7 +879,6 @@ impl MarketplaceContract<'static> {
                     res_messages.push(transfer_token_seller_msg.into());
                 }
             }
-
         }
 
         return res_messages;

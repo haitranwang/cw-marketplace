@@ -1,16 +1,19 @@
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
-use cosmwasm_std::{Binary, Deps, DepsMut, Env, MessageInfo, Response, StdError, StdResult, Uint128, attr, BankMsg, Coin, to_binary};
+use cosmwasm_std::{
+    attr, to_binary, BankMsg, Binary, Coin, Deps, DepsMut, Env, MessageInfo, Response, StdError,
+    StdResult, Uint128,
+};
 
 use cw2::set_contract_version;
 use cw20::{AllowanceResponse, Expiration};
 use cw20_base::allowances::query_allowance;
-use cw20_base::contract::{create_accounts, query as cw20_query, execute_update_minter};
+use cw20_base::contract::{create_accounts, execute_update_minter, query as cw20_query};
 use cw20_base::msg::{ExecuteMsg, QueryMsg};
-use cw20_base::state::{MinterData, TokenInfo, TOKEN_INFO, BALANCES};
+use cw20_base::state::{MinterData, TokenInfo, BALANCES, TOKEN_INFO};
 use cw20_base::ContractError;
 
-use crate::state::{ InstantiateMsg, MarketplaceInfo, MARKETPLACE_INFO };
+use crate::state::{InstantiateMsg, MarketplaceInfo, MARKETPLACE_INFO};
 
 // version info for migration info
 const CONTRACT_NAME: &str = "crates.io:cw20-base";
@@ -37,7 +40,7 @@ pub fn instantiate(
 
     // create initial accounts
     let total_supply = create_accounts(&mut deps, &msg.initial_balances)?;
-    
+
     if let Some(limit) = msg.get_cap() {
         if total_supply > limit {
             return Err(StdError::generic_err("Initial supply greater than cap").into());
@@ -83,15 +86,17 @@ pub fn execute(
 ) -> Result<Response, ContractError> {
     match msg {
         ExecuteMsg::Burn { amount } => marketplace_execute_burn(deps, env, info, amount),
-        ExecuteMsg::Mint { recipient, amount } => marketplace_execute_mint(deps, env, info, recipient, amount),
+        ExecuteMsg::Mint { recipient, amount } => {
+            marketplace_execute_mint(deps, env, info, recipient, amount)
+        }
         ExecuteMsg::TransferFrom {
             owner,
             recipient,
             amount,
         } => marketplace_execute_transfer_from(deps, env, info, owner, recipient, amount),
-        ExecuteMsg::UpdateMinter {
-            new_minter
-        } => execute_update_minter(deps, env, info, new_minter),
+        ExecuteMsg::UpdateMinter { new_minter } => {
+            execute_update_minter(deps, env, info, new_minter)
+        }
         // TODO: add message to update MarketplaceInfo here
         _ => {
             // the other messages not supported by this contract
@@ -101,11 +106,7 @@ pub fn execute(
 }
 
 #[cfg_attr(not(feature = "library"), entry_point)]
-pub fn query(
-    deps: Deps,
-    env: Env,
-    msg: QueryMsg
-) -> StdResult<Binary> {
+pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
     // TODO: add query for MarketplaceInfo here
     match msg {
         QueryMsg::Allowance { owner, spender } => {
@@ -117,9 +118,8 @@ pub fn query(
                 return to_binary(&query_allowance(deps, owner, spender)?);
             }
         }
-        _ => cw20_query(deps, env, msg)
+        _ => cw20_query(deps, env, msg),
     }
-    
 }
 
 pub fn marketplace_query_allowance(deps: Deps) -> StdResult<AllowanceResponse> {
@@ -149,11 +149,11 @@ pub fn marketplace_execute_burn(
         .ok_or(ContractError::Unauthorized {})?;
 
     // get the denom of SupportedNativeDenom
-    let native_denom = MARKETPLACE_INFO
-        .load(deps.storage)?
-        .native_denom;
+    let native_denom = MARKETPLACE_INFO.load(deps.storage)?.native_denom;
     // check the balance of NATIVE_DENOM of contract
-    let native_balance = deps.querier.query_balance(&env.contract.address, native_denom.clone())?;
+    let native_balance = deps
+        .querier
+        .query_balance(&env.contract.address, native_denom.clone())?;
     // if the balance is not enough, return error
     if native_balance.amount < amount {
         return Err(StdError::generic_err("Not enough native token").into());
@@ -209,8 +209,7 @@ pub fn marketplace_execute_mint(
     // check the funds are sent with the message
     // if the denom of funds is not the same as the native denom, we reject
     let native_denom = MARKETPLACE_INFO.load(deps.storage)?.native_denom;
-    if  info.funds.len() != 1 || 
-        info.funds[0].denom != native_denom {
+    if info.funds.len() != 1 || info.funds[0].denom != native_denom {
         return Err(ContractError::Unauthorized {});
     }
 

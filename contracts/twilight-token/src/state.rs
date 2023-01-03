@@ -75,11 +75,10 @@ mod test {
             }),
             name: "test_token".to_string(),
             symbol: "TNT".to_string(),
-            marketplace_info: MarketplaceInfo { 
-                marketplace_contract: "marketplace_contract".to_string(), 
+            marketplace_info: MarketplaceInfo {
+                marketplace_contract: "marketplace_contract".to_string(),
                 native_denom: "uaura".to_string(),
-            }
-            
+            },
         };
 
         assert_eq!(msg.get_cap(), Some(Uint128::from(1u128)))
@@ -96,8 +95,8 @@ mod test {
             }),
             name: "test_token".to_string(),
             symbol: "TNT".to_string(),
-            marketplace_info: MarketplaceInfo { 
-                marketplace_contract: "marketplace_contract".to_string(), 
+            marketplace_info: MarketplaceInfo {
+                marketplace_contract: "marketplace_contract".to_string(),
                 native_denom: "uaura".to_string(),
             },
         };
@@ -113,8 +112,8 @@ mod test {
             }),
             name: "a".to_string(),
             symbol: "TNT".to_string(),
-            marketplace_info: MarketplaceInfo { 
-                marketplace_contract: "marketplace_contract".to_string(), 
+            marketplace_info: MarketplaceInfo {
+                marketplace_contract: "marketplace_contract".to_string(),
                 native_denom: "uaura".to_string(),
             },
         };
@@ -135,8 +134,8 @@ mod test {
             }),
             name: "test_token".to_string(),
             symbol: "TN".to_string(),
-            marketplace_info: MarketplaceInfo { 
-                marketplace_contract: "marketplace_contract".to_string(), 
+            marketplace_info: MarketplaceInfo {
+                marketplace_contract: "marketplace_contract".to_string(),
                 native_denom: "uaura".to_string(),
             },
         };
@@ -157,8 +156,8 @@ mod test {
             }),
             name: "test_token".to_string(),
             symbol: "TNT".to_string(),
-            marketplace_info: MarketplaceInfo { 
-                marketplace_contract: "marketplace_contract".to_string(), 
+            marketplace_info: MarketplaceInfo {
+                marketplace_contract: "marketplace_contract".to_string(),
                 native_denom: "uaura".to_string(),
             },
         };
