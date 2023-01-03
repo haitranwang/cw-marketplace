@@ -34,7 +34,7 @@ pub fn instantiate(
     msg.validate()?;
 
     // this is a sanity check, to ensure that each token of this contract has garanteed by 1 native token
-    if msg.initial_balances.len() != 0 {
+    if msg.initial_balances.is_empty() {
         return Err(StdError::generic_err("Initial balances must be empty").into());
     }
 
@@ -100,7 +100,7 @@ pub fn execute(
         // TODO: add message to update MarketplaceInfo here
         _ => {
             // the other messages not supported by this contract
-            return Err(StdError::generic_err("Unsupported message").into());
+            Err(StdError::generic_err("Unsupported message").into())
         }
     }
 }
@@ -113,9 +113,9 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
             let marketplace_info = MARKETPLACE_INFO.load(deps.storage)?;
             if spender == marketplace_info.marketplace_contract {
                 // if spender is marketplace contract, return cap of minter
-                return to_binary(&marketplace_query_allowance(deps)?);
+                to_binary(&marketplace_query_allowance(deps)?)
             } else {
-                return to_binary(&query_allowance(deps, owner, spender)?);
+                to_binary(&query_allowance(deps, owner, spender)?)
             }
         }
         _ => cw20_query(deps, env, msg),
@@ -177,7 +177,7 @@ pub fn marketplace_execute_burn(
     let transfer_native_msg = BankMsg::Send {
         to_address: info.sender.to_string(),
         amount: vec![Coin {
-            denom: native_denom.clone(),
+            denom: native_denom,
             amount,
         }],
     };
