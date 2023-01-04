@@ -14,6 +14,7 @@
         "$ref": "#/definitions/Addr"
       }
     },
+    "additionalProperties": false,
     "definitions": {
       "Addr": {
         "description": "A human readable address.\n\nIn Cosmos, this is typically bech32 encoded. But for multi-chain smart contracts no assumptions should be made other than being UTF-8 encoded and of reasonable length.\n\nThis type represents a validated address. It can be created in the following ways 1. Use `Addr::unchecked(input)` 2. Use `let checked: Addr = deps.api.addr_validate(input)?` 3. Use `let checked: Addr = deps.api.addr_humanize(canonical_addr)?` 4. Deserialize from JSON. This must only be done from JSON that was validated before such as a contract's state. `Addr` must not be used in messages sent by the user because this would result in unvalidated instances.\n\nThis type is immutable. If you really need to mutate it (Really? Are you sure?), create a mutable copy using `let mut mutable = Addr::to_string()` and operate on that `String` instance.",
@@ -48,7 +49,8 @@
               "token_id": {
                 "type": "string"
               }
-            }
+            },
+            "additionalProperties": false
           }
         },
         "additionalProperties": false
@@ -72,7 +74,8 @@
               "token_id": {
                 "type": "string"
               }
-            }
+            },
+            "additionalProperties": false
           }
         },
         "additionalProperties": false
@@ -96,7 +99,8 @@
               "token_id": {
                 "type": "string"
               }
-            }
+            },
+            "additionalProperties": false
           }
         },
         "additionalProperties": false
@@ -116,7 +120,8 @@
               "auction_contract": {
                 "$ref": "#/definitions/AuctionContract"
               }
-            }
+            },
+            "additionalProperties": false
           }
         },
         "additionalProperties": false
@@ -136,7 +141,8 @@
               "contract_address": {
                 "type": "string"
               }
-            }
+            },
+            "additionalProperties": false
           }
         },
         "additionalProperties": false
@@ -152,10 +158,10 @@
           {
             "type": "object",
             "required": [
-              "FixedPrice"
+              "fixed_price"
             ],
             "properties": {
-              "FixedPrice": {
+              "fixed_price": {
                 "type": "object",
                 "required": [
                   "price"
@@ -184,7 +190,8 @@
                       }
                     ]
                   }
-                }
+                },
+                "additionalProperties": false
               }
             },
             "additionalProperties": false
@@ -192,10 +199,10 @@
           {
             "type": "object",
             "required": [
-              "Other"
+              "other"
             ],
             "properties": {
-              "Other": {
+              "other": {
                 "type": "object",
                 "required": [
                   "auction",
@@ -208,7 +215,8 @@
                   "config": {
                     "type": "string"
                   }
-                }
+                },
+                "additionalProperties": false
               }
             },
             "additionalProperties": false
@@ -234,7 +242,8 @@
           "name": {
             "type": "string"
           }
-        }
+        },
+        "additionalProperties": false
       },
       "Coin": {
         "type": "object",
@@ -327,7 +336,8 @@
         ],
         "properties": {
           "config": {
-            "type": "object"
+            "type": "object",
+            "additionalProperties": false
           }
         },
         "additionalProperties": false
@@ -361,7 +371,8 @@
                   "null"
                 ]
               }
-            }
+            },
+            "additionalProperties": false
           }
         },
         "additionalProperties": false
@@ -385,7 +396,8 @@
               "token_id": {
                 "type": "string"
               }
-            }
+            },
+            "additionalProperties": false
           }
         },
         "additionalProperties": false
@@ -397,7 +409,8 @@
         ],
         "properties": {
           "auction_contracts": {
-            "type": "object"
+            "type": "object",
+            "additionalProperties": false
           }
         },
         "additionalProperties": false
@@ -427,7 +440,8 @@
               "contract_address": {
                 "type": "string"
               }
-            }
+            },
+            "additionalProperties": false
           }
         },
         "additionalProperties": false
@@ -443,10 +457,10 @@
           {
             "type": "object",
             "required": [
-              "FixedPrice"
+              "fixed_price"
             ],
             "properties": {
-              "FixedPrice": {
+              "fixed_price": {
                 "type": "object",
                 "required": [
                   "price"
@@ -475,7 +489,8 @@
                       }
                     ]
                   }
-                }
+                },
+                "additionalProperties": false
               }
             },
             "additionalProperties": false
@@ -483,10 +498,10 @@
           {
             "type": "object",
             "required": [
-              "Other"
+              "other"
             ],
             "properties": {
-              "Other": {
+              "other": {
                 "type": "object",
                 "required": [
                   "auction",
@@ -499,7 +514,8 @@
                   "config": {
                     "type": "string"
                   }
-                }
+                },
+                "additionalProperties": false
               }
             },
             "additionalProperties": false
@@ -525,7 +541,8 @@
           "name": {
             "type": "string"
           }
-        }
+        },
+        "additionalProperties": false
       },
       "Coin": {
         "type": "object",
@@ -636,6 +653,7 @@
           "$ref": "#/definitions/Addr"
         }
       },
+      "additionalProperties": false,
       "definitions": {
         "Addr": {
           "description": "A human readable address.\n\nIn Cosmos, this is typically bech32 encoded. But for multi-chain smart contracts no assumptions should be made other than being UTF-8 encoded and of reasonable length.\n\nThis type represents a validated address. It can be created in the following ways 1. Use `Addr::unchecked(input)` 2. Use `let checked: Addr = deps.api.addr_validate(input)?` 3. Use `let checked: Addr = deps.api.addr_humanize(canonical_addr)?` 4. Deserialize from JSON. This must only be done from JSON that was validated before such as a contract's state. `Addr` must not be used in messages sent by the user because this would result in unvalidated instances.\n\nThis type is immutable. If you really need to mutate it (Really? Are you sure?), create a mutable copy using `let mut mutable = Addr::to_string()` and operate on that `String` instance.",
@@ -677,6 +695,7 @@
           "type": "string"
         }
       },
+      "additionalProperties": false,
       "definitions": {
         "Addr": {
           "description": "A human readable address.\n\nIn Cosmos, this is typically bech32 encoded. But for multi-chain smart contracts no assumptions should be made other than being UTF-8 encoded and of reasonable length.\n\nThis type represents a validated address. It can be created in the following ways 1. Use `Addr::unchecked(input)` 2. Use `let checked: Addr = deps.api.addr_validate(input)?` 3. Use `let checked: Addr = deps.api.addr_humanize(canonical_addr)?` 4. Deserialize from JSON. This must only be done from JSON that was validated before such as a contract's state. `Addr` must not be used in messages sent by the user because this would result in unvalidated instances.\n\nThis type is immutable. If you really need to mutate it (Really? Are you sure?), create a mutable copy using `let mut mutable = Addr::to_string()` and operate on that `String` instance.",
@@ -687,10 +706,10 @@
             {
               "type": "object",
               "required": [
-                "FixedPrice"
+                "fixed_price"
               ],
               "properties": {
-                "FixedPrice": {
+                "fixed_price": {
                   "type": "object",
                   "required": [
                     "price"
@@ -719,7 +738,8 @@
                         }
                       ]
                     }
-                  }
+                  },
+                  "additionalProperties": false
                 }
               },
               "additionalProperties": false
@@ -727,10 +747,10 @@
             {
               "type": "object",
               "required": [
-                "Other"
+                "other"
               ],
               "properties": {
-                "Other": {
+                "other": {
                   "type": "object",
                   "required": [
                     "auction",
@@ -743,7 +763,8 @@
                     "config": {
                       "type": "string"
                     }
-                  }
+                  },
+                  "additionalProperties": false
                 }
               },
               "additionalProperties": false
@@ -769,7 +790,8 @@
             "name": {
               "type": "string"
             }
-          }
+          },
+          "additionalProperties": false
         },
         "Coin": {
           "type": "object",
@@ -838,11 +860,12 @@
             {
               "type": "object",
               "required": [
-                "Ongoing"
+                "ongoing"
               ],
               "properties": {
-                "Ongoing": {
-                  "type": "object"
+                "ongoing": {
+                  "type": "object",
+                  "additionalProperties": false
                 }
               },
               "additionalProperties": false
@@ -850,10 +873,10 @@
             {
               "type": "object",
               "required": [
-                "Cancelled"
+                "cancelled"
               ],
               "properties": {
-                "Cancelled": {
+                "cancelled": {
                   "type": "object",
                   "required": [
                     "cancelled_at"
@@ -862,7 +885,8 @@
                     "cancelled_at": {
                       "$ref": "#/definitions/Timestamp"
                     }
-                  }
+                  },
+                  "additionalProperties": false
                 }
               },
               "additionalProperties": false
@@ -870,10 +894,10 @@
             {
               "type": "object",
               "required": [
-                "Sold"
+                "sold"
               ],
               "properties": {
-                "Sold": {
+                "sold": {
                   "type": "object",
                   "required": [
                     "buyer"
@@ -882,7 +906,8 @@
                     "buyer": {
                       "$ref": "#/definitions/Addr"
                     }
-                  }
+                  },
+                  "additionalProperties": false
                 }
               },
               "additionalProperties": false
@@ -922,6 +947,7 @@
           }
         }
       },
+      "additionalProperties": false,
       "definitions": {
         "Addr": {
           "description": "A human readable address.\n\nIn Cosmos, this is typically bech32 encoded. But for multi-chain smart contracts no assumptions should be made other than being UTF-8 encoded and of reasonable length.\n\nThis type represents a validated address. It can be created in the following ways 1. Use `Addr::unchecked(input)` 2. Use `let checked: Addr = deps.api.addr_validate(input)?` 3. Use `let checked: Addr = deps.api.addr_humanize(canonical_addr)?` 4. Deserialize from JSON. This must only be done from JSON that was validated before such as a contract's state. `Addr` must not be used in messages sent by the user because this would result in unvalidated instances.\n\nThis type is immutable. If you really need to mutate it (Really? Are you sure?), create a mutable copy using `let mut mutable = Addr::to_string()` and operate on that `String` instance.",
@@ -932,10 +958,10 @@
             {
               "type": "object",
               "required": [
-                "FixedPrice"
+                "fixed_price"
               ],
               "properties": {
-                "FixedPrice": {
+                "fixed_price": {
                   "type": "object",
                   "required": [
                     "price"
@@ -964,7 +990,8 @@
                         }
                       ]
                     }
-                  }
+                  },
+                  "additionalProperties": false
                 }
               },
               "additionalProperties": false
@@ -972,10 +999,10 @@
             {
               "type": "object",
               "required": [
-                "Other"
+                "other"
               ],
               "properties": {
-                "Other": {
+                "other": {
                   "type": "object",
                   "required": [
                     "auction",
@@ -988,7 +1015,8 @@
                     "config": {
                       "type": "string"
                     }
-                  }
+                  },
+                  "additionalProperties": false
                 }
               },
               "additionalProperties": false
@@ -1014,7 +1042,8 @@
             "name": {
               "type": "string"
             }
-          }
+          },
+          "additionalProperties": false
         },
         "Coin": {
           "type": "object",
@@ -1109,18 +1138,20 @@
             "token_id": {
               "type": "string"
             }
-          }
+          },
+          "additionalProperties": false
         },
         "ListingStatus": {
           "oneOf": [
             {
               "type": "object",
               "required": [
-                "Ongoing"
+                "ongoing"
               ],
               "properties": {
-                "Ongoing": {
-                  "type": "object"
+                "ongoing": {
+                  "type": "object",
+                  "additionalProperties": false
                 }
               },
               "additionalProperties": false
@@ -1128,10 +1159,10 @@
             {
               "type": "object",
               "required": [
-                "Cancelled"
+                "cancelled"
               ],
               "properties": {
-                "Cancelled": {
+                "cancelled": {
                   "type": "object",
                   "required": [
                     "cancelled_at"
@@ -1140,7 +1171,8 @@
                     "cancelled_at": {
                       "$ref": "#/definitions/Timestamp"
                     }
-                  }
+                  },
+                  "additionalProperties": false
                 }
               },
               "additionalProperties": false
@@ -1148,10 +1180,10 @@
             {
               "type": "object",
               "required": [
-                "Sold"
+                "sold"
               ],
               "properties": {
-                "Sold": {
+                "sold": {
                   "type": "object",
                   "required": [
                     "buyer"
@@ -1160,7 +1192,8 @@
                     "buyer": {
                       "$ref": "#/definitions/Addr"
                     }
-                  }
+                  },
+                  "additionalProperties": false
                 }
               },
               "additionalProperties": false
