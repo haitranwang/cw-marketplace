@@ -34,7 +34,7 @@ pub fn instantiate(
     msg.validate()?;
 
     // this is a sanity check, to ensure that each token of this contract has garanteed by 1 native token
-    if msg.initial_balances.is_empty() {
+    if !msg.initial_balances.is_empty() {
         return Err(StdError::generic_err("Initial balances must be empty").into());
     }
 
@@ -153,7 +153,7 @@ pub fn marketplace_execute_burn(
     // check the balance of NATIVE_DENOM of contract
     let native_balance = deps
         .querier
-        .query_balance(&env.contract.address, native_denom.clone())?;
+        .query_balance(env.contract.address, native_denom.clone())?;
     // if the balance is not enough, return error
     if native_balance.amount < amount {
         return Err(StdError::generic_err("Not enough native token").into());

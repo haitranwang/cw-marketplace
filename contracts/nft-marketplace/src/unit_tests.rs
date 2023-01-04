@@ -905,8 +905,10 @@ mod tests {
         end_time: Cw20Expiration,
     ) -> Result<Response, ContractError> {
         let msg = ExecuteMsg::OfferNft {
-            contract_address: contract_address.to_string(),
-            token_id,
+            nft: Asset::Nft {
+                nft_address: contract_address,
+                token_id,
+            },
             funds,
             end_time,
         };
@@ -923,8 +925,10 @@ mod tests {
     ) -> Result<Response, ContractError> {
         let msg = ExecuteMsg::AcceptNftOffer {
             offerer: offerer.to_string(),
-            contract_address: contract_address.to_string(),
-            token_id: token_id,
+            nft: Asset::Nft {
+                nft_address: contract_address,
+                token_id,
+            },
         };
         let info = mock_info(sender, &coins(1000, "uaura"));
         execute(deps, mock_env(), info, msg)
@@ -1514,8 +1518,10 @@ mod tests {
             // offerer creates offer
             // prepare offer nft message
             let offer_nft_msg = ExecuteMsg::OfferNft {
-                contract_address: cw2981_address.clone(),
-                token_id: Some(MOCK_OFFER_NFT_TOKEN_ID_1.to_string()),
+                nft: Asset::Nft {
+                    nft_address: Addr::unchecked(cw2981_address.clone()),
+                    token_id: Some(MOCK_OFFER_NFT_TOKEN_ID_1.to_string()),
+                },
                 funds: Asset::Cw20 {
                     token_address: Addr::unchecked(cw20_address.clone()),
                     amount: MOCK_OFFER_CW20_PRICE,
@@ -1569,8 +1575,10 @@ mod tests {
             // prepare accept offer message
             let accept_offer_msg = ExecuteMsg::AcceptNftOffer {
                 offerer: USER_1.to_string(),
-                contract_address: cw2981_address.clone(),
-                token_id: Some(MOCK_OFFER_NFT_TOKEN_ID_1.to_string()),
+                nft: Asset::Nft {
+                    nft_address: Addr::unchecked(cw2981_address.clone()),
+                    token_id: Some(MOCK_OFFER_NFT_TOKEN_ID_1.to_string()),
+                },
             };
 
             // owner (ADMIN) accepts offer

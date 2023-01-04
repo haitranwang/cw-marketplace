@@ -81,41 +81,16 @@ pub fn execute(
 
         // Implement Odering style
         ExecuteMsg::OfferNft {
-            contract_address,
-            token_id,
+            nft,
             funds,
             end_time,
-        } => contract().execute_offer_nft(
-            deps,
-            _env,
-            info,
-            api.addr_validate(&contract_address)?,
-            token_id,
-            funds,
-            end_time,
-        ),
-        ExecuteMsg::AcceptNftOffer {
-            offerer,
-            contract_address,
-            token_id,
-        } => contract().execute_accept_nft_offer(
-            deps,
-            _env,
-            info,
-            api.addr_validate(&offerer)?,
-            api.addr_validate(&contract_address)?,
-            token_id,
-        ),
-        ExecuteMsg::CancelNftOffer {
-            contract_address,
-            token_id,
-        } => contract().execute_cancel_nft_offer(
-            deps,
-            _env,
-            info,
-            api.addr_validate(&contract_address)?,
-            token_id,
-        ),
+        } => contract().execute_offer_nft(deps, _env, info, nft, funds, end_time),
+        ExecuteMsg::AcceptNftOffer { offerer, nft } => {
+            contract().execute_accept_nft_offer(deps, _env, info, api.addr_validate(&offerer)?, nft)
+        }
+        ExecuteMsg::CancelNftOffer { nft } => {
+            contract().execute_cancel_nft_offer(deps, _env, info, nft)
+        }
         ExecuteMsg::CancelAllOffer {} => contract().execute_cancel_all_offer(deps, _env, info),
     }
 }

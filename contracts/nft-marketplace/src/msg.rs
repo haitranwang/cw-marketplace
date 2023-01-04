@@ -42,21 +42,18 @@ pub enum ExecuteMsg {
     // Implement Odering style
     // Offer a Nft
     OfferNft {
-        contract_address: String,
-        token_id: Option<String>,
+        nft: Asset,
         funds: Asset,
         end_time: Expiration,
     },
     // Accept a Nft offer
     AcceptNftOffer {
         offerer: String,
-        contract_address: String,
-        token_id: Option<String>,
+        nft: Asset,
     },
     // Cancel a Nft offer
     CancelNftOffer {
-        contract_address: String,
-        token_id: Option<String>,
+        nft: Asset,
     },
     // Cancel all offer of User
     CancelAllOffer {},
