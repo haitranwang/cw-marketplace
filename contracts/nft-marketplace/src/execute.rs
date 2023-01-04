@@ -537,19 +537,15 @@ impl MarketplaceContract<'static> {
                     }
                     // if the token_id is not exist, then this order is offer for a collection of nft
                     // we will handle this in the next version => return error for now
-                    None => {
-                        Err(ContractError::CustomError {
-                            val: ("Collection offer is not supported".to_string()),
-                        })
-                    }
+                    None => Err(ContractError::CustomError {
+                        val: ("Collection offer is not supported".to_string()),
+                    }),
                 }
             }
             // we ignore the other type of funds and return error for now
-            _ => {
-                Err(ContractError::CustomError {
-                    val: ("Invalid Offer funds".to_string()),
-                })
-            }
+            _ => Err(ContractError::CustomError {
+                val: ("Invalid Offer funds".to_string()),
+            }),
         }
     }
 
@@ -663,20 +659,16 @@ impl MarketplaceContract<'static> {
                         Ok(res)
                     }
                     // if the consideration item is not Nft, then return error
-                    _ => {
-                        Err(ContractError::CustomError {
-                            val: ("Consideration is not NFT".to_string()),
-                        })
-                    }
+                    _ => Err(ContractError::CustomError {
+                        val: ("Consideration is not NFT".to_string()),
+                    }),
                 }
             }
             // if the token_id is not exist, then this order is offer for a collection of nft
             // we will handle this in the next version => return error for now
-            None => {
-                Err(ContractError::CustomError {
-                    val: ("Collection offer is not supported".to_string()),
-                })
-            }
+            None => Err(ContractError::CustomError {
+                val: ("Collection offer is not supported".to_string()),
+            }),
         }
     }
 
@@ -705,11 +697,9 @@ impl MarketplaceContract<'static> {
                     .add_attribute("token_id", token_id)
                     .add_attribute("cancelled_at", env.block.time.to_string()))
             }
-            _ => {
-                Err(ContractError::CustomError {
-                    val: ("Collection offer is not supported".to_string()),
-                })
-            }
+            _ => Err(ContractError::CustomError {
+                val: ("Collection offer is not supported".to_string()),
+            }),
         }
     }
 
