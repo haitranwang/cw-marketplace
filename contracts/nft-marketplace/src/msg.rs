@@ -3,7 +3,7 @@ use cosmwasm_std::Addr;
 use cw20::Expiration;
 
 use crate::{
-    order_state::{Asset, OrderComponents},
+    order_state::{Asset, OrderComponents, CW20, NFT},
     state::{AuctionConfig, AuctionContract, Listing},
 };
 
@@ -42,18 +42,18 @@ pub enum ExecuteMsg {
     // Implement Odering style
     // Offer a Nft
     OfferNft {
-        nft: Asset,
-        funds: Asset,
+        nft: NFT,
+        funds: CW20,
         end_time: Expiration,
     },
     // Accept a Nft offer
     AcceptNftOffer {
         offerer: String,
-        nft: Asset,
+        nft: NFT,
     },
     // Cancel a Nft offer
     CancelNftOffer {
-        nft: Asset,
+        nft: NFT,
     },
     // Cancel all offer of User
     CancelAllOffer {},

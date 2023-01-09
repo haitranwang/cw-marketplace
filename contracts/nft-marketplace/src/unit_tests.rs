@@ -3,7 +3,7 @@ mod tests {
     use crate::contract::*;
     use crate::integration_tests::env::{instantiate_contracts, ADMIN, USER_1};
     use crate::msg::{ExecuteMsg, InstantiateMsg, ListingsResponse, QueryMsg};
-    use crate::order_state::Asset;
+    use crate::order_state::{CW20, NFT};
     use crate::state::{contract, AuctionConfig, Config, ListingStatus};
     use crate::ContractError;
 
@@ -901,11 +901,11 @@ mod tests {
         sender: &str,
         contract_address: Addr,
         token_id: Option<String>,
-        funds: Asset,
+        funds: CW20,
         end_time: Cw20Expiration,
     ) -> Result<Response, ContractError> {
         let msg = ExecuteMsg::OfferNft {
-            nft: Asset::Nft {
+            nft: NFT {
                 contract_address,
                 token_id,
             },
@@ -925,7 +925,7 @@ mod tests {
     ) -> Result<Response, ContractError> {
         let msg = ExecuteMsg::AcceptNftOffer {
             offerer: offerer.to_string(),
-            nft: Asset::Nft {
+            nft: NFT {
                 contract_address,
                 token_id,
             },
@@ -935,6 +935,8 @@ mod tests {
     }
 
     mod offer_nft {
+        use crate::order_state::CW20;
+
         use super::*;
 
         // test offer a specific nft
@@ -951,7 +953,7 @@ mod tests {
                 MOCK_OFFER_NFT_OFFERER_1,
                 Addr::unchecked(MOCK_CW2981_ADDR),
                 Some(MOCK_OFFER_NFT_TOKEN_ID_1.to_string()),
-                Asset::Cw20 {
+                CW20 {
                     contract_address: Addr::unchecked(MOCK_OFFER_CW20_ADDR),
                     amount: 10000000,
                 },
@@ -975,7 +977,7 @@ mod tests {
                 MOCK_OFFER_NFT_OFFERER_1,
                 Addr::unchecked(MOCK_CW2981_ADDR),
                 Some(MOCK_OFFER_NFT_TOKEN_ID_INVALID.to_string()),
-                Asset::Cw20 {
+                CW20 {
                     contract_address: Addr::unchecked(MOCK_OFFER_CW20_ADDR),
                     amount: 10000000,
                 },
@@ -1004,7 +1006,7 @@ mod tests {
                 MOCK_OFFER_NFT_OWNER,
                 Addr::unchecked(MOCK_CW2981_ADDR),
                 Some(MOCK_OFFER_NFT_TOKEN_ID_1.to_string()),
-                Asset::Cw20 {
+                CW20 {
                     contract_address: Addr::unchecked(MOCK_OFFER_CW20_ADDR),
                     amount: 10000000,
                 },
@@ -1033,7 +1035,7 @@ mod tests {
                 MOCK_OFFER_NFT_OFFERER_1,
                 Addr::unchecked(MOCK_CW2981_ADDR),
                 None,
-                Asset::Cw20 {
+                CW20 {
                     contract_address: Addr::unchecked(MOCK_OFFER_CW20_ADDR),
                     amount: 10000000,
                 },
@@ -1062,7 +1064,7 @@ mod tests {
                 MOCK_OFFER_NFT_OFFERER_INSUFFICIENT_ALLOWANCE,
                 Addr::unchecked(MOCK_CW2981_ADDR),
                 Some(MOCK_OFFER_NFT_TOKEN_ID_1.to_string()),
-                Asset::Cw20 {
+                CW20 {
                     contract_address: Addr::unchecked(MOCK_OFFER_CW20_ADDR),
                     amount: 10000000,
                 },
@@ -1088,7 +1090,7 @@ mod tests {
                 MOCK_OFFER_NFT_OFFERER_INSUFFICIENT_BALANCE,
                 Addr::unchecked(MOCK_CW2981_ADDR),
                 Some(MOCK_OFFER_NFT_TOKEN_ID_1.to_string()),
-                Asset::Cw20 {
+                CW20 {
                     contract_address: Addr::unchecked(MOCK_OFFER_CW20_ADDR),
                     amount: 10000000,
                 },
@@ -1114,7 +1116,7 @@ mod tests {
                 MOCK_OFFER_NFT_OFFERER_1,
                 Addr::unchecked(MOCK_CW2981_ADDR),
                 Some(MOCK_OFFER_NFT_TOKEN_ID_1.to_string()),
-                Asset::Cw20 {
+                CW20 {
                     contract_address: Addr::unchecked(MOCK_OFFER_CW20_ADDR),
                     amount: 10000000,
                 },
@@ -1405,7 +1407,7 @@ mod tests {
     }
 
     mod accept_offer {
-        use crate::integration_tests::env::NATIVE_DENOM;
+        use crate::{integration_tests::env::NATIVE_DENOM, order_state::CW20};
 
         use super::*;
         use cw20::{BalanceResponse, Cw20QueryMsg};
@@ -1428,7 +1430,7 @@ mod tests {
                 MOCK_OFFER_NFT_OFFERER_1,
                 Addr::unchecked(MOCK_CW2981_ADDR),
                 Some(MOCK_OFFER_NFT_TOKEN_ID_1.to_string()),
-                Asset::Cw20 {
+                CW20 {
                     contract_address: Addr::unchecked(MOCK_OFFER_CW20_ADDR),
                     amount: 10000000,
                 },
@@ -1518,11 +1520,11 @@ mod tests {
             // offerer creates offer
             // prepare offer nft message
             let offer_nft_msg = ExecuteMsg::OfferNft {
-                nft: Asset::Nft {
+                nft: NFT {
                     contract_address: Addr::unchecked(cw2981_address.clone()),
                     token_id: Some(MOCK_OFFER_NFT_TOKEN_ID_1.to_string()),
                 },
-                funds: Asset::Cw20 {
+                funds: CW20 {
                     contract_address: Addr::unchecked(cw20_address.clone()),
                     amount: MOCK_OFFER_CW20_PRICE,
                 },
@@ -1575,7 +1577,7 @@ mod tests {
             // prepare accept offer message
             let accept_offer_msg = ExecuteMsg::AcceptNftOffer {
                 offerer: USER_1.to_string(),
-                nft: Asset::Nft {
+                nft: NFT {
                     contract_address: Addr::unchecked(cw2981_address.clone()),
                     token_id: Some(MOCK_OFFER_NFT_TOKEN_ID_1.to_string()),
                 },

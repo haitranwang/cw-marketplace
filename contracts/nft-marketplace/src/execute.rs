@@ -1,6 +1,6 @@
 use crate::order_state::{
     consideration_item, offer_item, order_key, Asset, ItemType, OrderComponents, OrderType,
-    PaymentAsset,
+    PaymentAsset, CW20, NFT,
 };
 use crate::{
     state::{
@@ -397,8 +397,8 @@ impl MarketplaceContract<'static> {
         deps: DepsMut,
         env: Env,
         info: MessageInfo,
-        nft: Asset,
-        funds: Asset,
+        nft: NFT,
+        funds: CW20,
         end_time: Cw20Expiration,
     ) -> Result<Response, ContractError> {
         // check if the end time is valid
@@ -408,153 +408,133 @@ impl MarketplaceContract<'static> {
         // ***********
         // OFFERING FUNDS
         // ***********
-        match funds {
-            // the funds must be cw20 token
-            Asset::Cw20 {
-                contract_address: token_address,
-                amount,
-            } => {
-                // check that the allowance of the cw20 offer token is enough
-                let allowance_response: AllowanceResponse = deps
-                    .querier
-                    .query_wasm_smart(
-                        &token_address,
-                        &Cw20QueryMsg::Allowance {
-                            owner: info.sender.to_string(),
-                            spender: env.contract.address.to_string(),
-                        },
-                    )
-                    .unwrap();
+        let token_address = funds.contract_address;
+        let amount = funds.amount;
 
-                // check if the allowance is greater or equal the offer amount
-                if allowance_response.allowance < Uint128::from(amount) {
-                    return Err(ContractError::InsufficientAllowance {});
-                }
+        // check that the allowance of the cw20 offer token is enough
+        let allowance_response: AllowanceResponse = deps
+            .querier
+            .query_wasm_smart(
+                &token_address,
+                &Cw20QueryMsg::Allowance {
+                    owner: info.sender.to_string(),
+                    spender: env.contract.address.to_string(),
+                },
+            )
+            .unwrap();
 
-                // check that the balance of the cw20 offer token is enough
-                let balance_response: BalanceResponse = deps
-                    .querier
-                    .query_wasm_smart(
-                        &token_address,
-                        &Cw20QueryMsg::Balance {
-                            address: info.sender.to_string(),
-                        },
-                    )
-                    .unwrap();
+        // check if the allowance is greater or equal the offer amount
+        if allowance_response.allowance < Uint128::from(amount) {
+            return Err(ContractError::InsufficientAllowance {});
+        }
 
-                // if the balance is smaller the offer amount, return error
-                if balance_response.balance < Uint128::from(amount) {
-                    return Err(ContractError::InsufficientBalance {});
-                }
+        // check that the balance of the cw20 offer token is enough
+        let balance_response: BalanceResponse = deps
+            .querier
+            .query_wasm_smart(
+                &token_address,
+                &Cw20QueryMsg::Balance {
+                    address: info.sender.to_string(),
+                },
+            )
+            .unwrap();
 
-                // *******************
-                // CONSIDERATION ITEMS
-                // *******************
-                match nft {
-                    Asset::Nft {
-                        contract_address,
-                        token_id,
-                    } => {
-                        if let Some(token_id) = token_id {
-                            // query the owner of the nft to check if the nft exist
-                            let owner_response: StdResult<cw721::OwnerOfResponse> =
-                                deps.querier.query_wasm_smart(
-                                    &contract_address,
-                                    &Cw721QueryMsg::OwnerOf {
-                                        token_id: token_id.clone(),
-                                        include_expired: Some(false),
-                                    },
-                                );
+        // if the balance is smaller the offer amount, return error
+        if balance_response.balance < Uint128::from(amount) {
+            return Err(ContractError::InsufficientBalance {});
+        }
 
-                            match owner_response {
-                                Ok(owner) => {
-                                    if owner.owner == info.sender {
-                                        return Err(ContractError::CustomError {
-                                            val: ("Cannot offer owned nft".to_string()),
-                                        });
-                                    }
-                                }
-                                Err(_) => {
-                                    return Err(ContractError::CustomError {
-                                        val: ("Nft not exist".to_string()),
-                                    });
-                                }
-                            }
+        // *******************
+        // CONSIDERATION ITEMS
+        // *******************
+        let contract_address = nft.contract_address;
+        let token_id = nft.token_id;
+        if let Some(token_id) = token_id {
+            // query the owner of the nft to check if the nft exist
+            let owner_response: StdResult<cw721::OwnerOfResponse> = deps.querier.query_wasm_smart(
+                &contract_address,
+                &Cw721QueryMsg::OwnerOf {
+                    token_id: token_id.clone(),
+                    include_expired: Some(false),
+                },
+            );
 
-                            // generate order key for order components based on user address, contract address and token id
-                            let order_key = order_key(&info.sender, &contract_address, &token_id);
-
-                            // the offer item will contain the infomation of cw20 token
-                            let offer_item = offer_item(
-                                &ItemType::CW20,
-                                &Asset::Cw20 {
-                                    contract_address: token_address,
-                                    amount,
-                                },
-                                &0u128,
-                                &0u128,
-                            );
-
-                            // the consideration item will contain the infomation of nft
-                            let consideration_item = consideration_item(
-                                &ItemType::CW721,
-                                &Asset::Nft {
-                                    contract_address,
-                                    token_id: Some(token_id),
-                                },
-                                &0u128,
-                                &0u128,
-                                &info.sender,
-                            );
-
-                            // generate order components
-                            let order_offer = OrderComponents {
-                                order_type: OrderType::OFFER, // The type of offer must be OFFER
-                                order_id: order_key.clone(),
-                                offerer: info.sender,
-                                offer: [offer_item].to_vec(),
-                                consideration: [consideration_item].to_vec(),
-                                start_time: None,
-                                end_time: Some(end_time),
-                            };
-
-                            // we will override the order if it already exists
-                            let new_offer = self.offers.update(
-                                deps.storage,
-                                order_key,
-                                |_old| -> Result<OrderComponents, ContractError> {
-                                    Ok(order_offer)
-                                },
-                            )?;
-
-                            let offer_str = serde_json::to_string(&new_offer.offer);
-                            let consideration_str = serde_json::to_string(&new_offer.consideration);
-
-                            // return success
-                            Ok(Response::new()
-                                .add_attribute("method", "offer_nft")
-                                .add_attribute("order_type", "OFFER")
-                                .add_attribute("offerer", new_offer.offerer)
-                                .add_attribute("offer", offer_str.unwrap())
-                                .add_attribute("consideration", consideration_str.unwrap())
-                                .add_attribute("end_time", new_offer.end_time.unwrap().to_string()))
-                        } else {
-                            // if the token_id is not exist, then this order is offer for a collection of nft
-                            // we will handle this in the next version => return error for now
-                            Err(ContractError::CustomError {
-                                val: ("Collection offer is not supported".to_string()),
-                            })
-                        }
+            match owner_response {
+                Ok(owner) => {
+                    if owner.owner == info.sender {
+                        return Err(ContractError::CustomError {
+                            val: ("Cannot offer owned nft".to_string()),
+                        });
                     }
-                    _ => Err(ContractError::CustomError {
-                        val: ("Invalid Consideration".to_string()),
-                    }),
+                }
+                Err(_) => {
+                    return Err(ContractError::CustomError {
+                        val: ("Nft not exist".to_string()),
+                    });
                 }
             }
-            // we ignore the other type of funds and return error for now
-            _ => Err(ContractError::CustomError {
-                val: ("Invalid Offer funds".to_string()),
-            }),
+
+            // generate order key for order components based on user address, contract address and token id
+            let order_key = order_key(&info.sender, &contract_address, &token_id);
+
+            // the offer item will contain the infomation of cw20 token
+            let offer_item = offer_item(
+                &ItemType::CW20,
+                &Asset::Cw20(CW20 {
+                    contract_address: token_address,
+                    amount,
+                }),
+                &0u128,
+                &0u128,
+            );
+
+            // the consideration item will contain the infomation of nft
+            let consideration_item = consideration_item(
+                &ItemType::CW721,
+                &Asset::Nft(NFT {
+                    contract_address,
+                    token_id: Some(token_id),
+                }),
+                &0u128,
+                &0u128,
+                &info.sender,
+            );
+
+            // generate order components
+            let order_offer = OrderComponents {
+                order_type: OrderType::OFFER, // The type of offer must be OFFER
+                order_id: order_key.clone(),
+                offerer: info.sender,
+                offer: [offer_item].to_vec(),
+                consideration: [consideration_item].to_vec(),
+                start_time: None,
+                end_time: Some(end_time),
+            };
+
+            // we will override the order if it already exists
+            let new_offer = self.offers.update(
+                deps.storage,
+                order_key,
+                |_old| -> Result<OrderComponents, ContractError> { Ok(order_offer) },
+            )?;
+
+            let offer_str = serde_json::to_string(&new_offer.offer);
+            let consideration_str = serde_json::to_string(&new_offer.consideration);
+
+            // return success
+            Ok(Response::new()
+                .add_attribute("method", "offer_nft")
+                .add_attribute("order_type", "OFFER")
+                .add_attribute("offerer", new_offer.offerer)
+                .add_attribute("offer", offer_str.unwrap())
+                .add_attribute("consideration", consideration_str.unwrap())
+                .add_attribute("end_time", new_offer.end_time.unwrap().to_string()))
+        } else {
+            // if the token_id is not exist, then this order is offer for a collection of nft
+            // we will handle this in the next version => return error for now
+            Err(ContractError::CustomError {
+                val: ("Collection offer is not supported".to_string()),
+            })
         }
     }
 
@@ -565,124 +545,115 @@ impl MarketplaceContract<'static> {
         env: Env,
         info: MessageInfo,
         offerer: Addr,
-        nft: Asset,
+        nft: NFT,
     ) -> Result<Response, ContractError> {
-        match nft {
-            Asset::Nft {
-                contract_address,
-                token_id,
-            } => {
-                // if the token_id is exist, then this order is offer for a specific nft
-                if let Some(token_id) = token_id {
-                    // generate order key for order components based on user address, contract address and token id
-                    let order_key = order_key(&offerer, &contract_address, &token_id);
+        let contract_address = nft.contract_address;
+        let token_id = nft.token_id;
+        // if the token_id is exist, then this order is offer for a specific nft
+        if let Some(token_id) = token_id {
+            // generate order key for order components based on user address, contract address and token id
+            let order_key = order_key(&offerer, &contract_address, &token_id);
 
-                    // get order components
-                    let order_components = self.offers.load(deps.storage, order_key.clone())?;
+            // get order components
+            let order_components = self.offers.load(deps.storage, order_key.clone())?;
 
-                    // if the end time of the offer is expired, then return error
-                    if order_components.end_time.unwrap().is_expired(&env.block) {
-                        return Err(ContractError::CustomError {
-                            val: ("Offer is expired".to_string()),
-                        });
-                    }
-
-                    match &order_components.consideration[0].item {
-                        // match if the consideration item is Nft
-                        Asset::Nft {
-                            contract_address,
-                            token_id,
-                        } => {
-                            // query the owner of the nft
-                            let owner: cw721::OwnerOfResponse = deps
-                                .querier
-                                .query_wasm_smart(
-                                    contract_address,
-                                    &Cw721QueryMsg::OwnerOf {
-                                        token_id: token_id.clone().unwrap(),
-                                        include_expired: Some(false),
-                                    },
-                                )
-                                .unwrap();
-
-                            // if the nft is not belong to the info.sender, then return error
-                            if owner.owner != info.sender {
-                                return Err(ContractError::Unauthorized {});
-                            }
-
-                            let mut res: Response = Response::new();
-
-                            // ***********************
-                            // TRANSFER CW20 TO SENDER
-                            // ***********************
-                            // convert Asset to PaymentAsset
-                            let payment_item =
-                                PaymentAsset::from(order_components.offer[0].item.clone());
-
-                            // execute cw20 transfer msg from offerer to info.sender
-                            match &payment_item {
-                                PaymentAsset::Cw20 {
-                                    contract_address: _,
-                                    amount: _,
-                                } => {
-                                    let payment_messages = self.payment_with_royalty(
-                                        &deps,
-                                        contract_address.clone(),
-                                        token_id.as_ref().unwrap().clone(),
-                                        payment_item.clone(),
-                                        offerer,
-                                        info.sender,
-                                    );
-
-                                    // loop through all payment messages and add item to response to execute
-                                    for payment_message in payment_messages {
-                                        res = res.add_message(payment_message);
-                                    }
-                                }
-                                _ => {
-                                    return Err(ContractError::CustomError {
-                                        val: ("Invalid Offer funding type".to_string()),
-                                    });
-                                }
-                            }
-
-                            // ***********************
-                            // TRANSFER NFT TO OFFERER
-                            // ***********************
-                            // message to transfer nft to offerer
-                            let transfer_nft_msg = WasmMsg::Execute {
-                                contract_addr: contract_address.clone().to_string(),
-                                msg: to_binary(&Cw2981ExecuteMsg::TransferNft {
-                                    recipient: order_components.offerer.clone().to_string(),
-                                    token_id: token_id.clone().unwrap(),
-                                })?,
-                                funds: vec![],
-                            };
-
-                            // add transfer nft message to response to execute
-                            res = res.add_message(transfer_nft_msg);
-
-                            res = res.add_attribute("method", "execute_accept_nft_offer");
-
-                            // After the offer is accepted, we will delete the order
-                            self.offers.remove(deps.storage, order_key)?;
-
-                            Ok(res)
-                        }
-                        // if the consideration item is not Nft, then return error
-                        _ => Err(ContractError::CustomError {
-                            val: ("Consideration is not NFT".to_string()),
-                        }),
-                    }
-                } else {
-                    Err(ContractError::CustomError {
-                        val: ("Collection offer is not supported".to_string()),
-                    })
-                }
+            // if the end time of the offer is expired, then return error
+            if order_components.end_time.unwrap().is_expired(&env.block) {
+                return Err(ContractError::CustomError {
+                    val: ("Offer is expired".to_string()),
+                });
             }
-            _ => Err(ContractError::CustomError {
-                val: ("Invalid NFT".to_string()),
-            }),
+
+            match &order_components.consideration[0].item {
+                // match if the consideration item is Nft
+                Asset::Nft(NFT {
+                    contract_address,
+                    token_id,
+                }) => {
+                    // query the owner of the nft
+                    let owner: cw721::OwnerOfResponse = deps
+                        .querier
+                        .query_wasm_smart(
+                            contract_address,
+                            &Cw721QueryMsg::OwnerOf {
+                                token_id: token_id.clone().unwrap(),
+                                include_expired: Some(false),
+                            },
+                        )
+                        .unwrap();
+
+                    // if the nft is not belong to the info.sender, then return error
+                    if owner.owner != info.sender {
+                        return Err(ContractError::Unauthorized {});
+                    }
+
+                    let mut res: Response = Response::new();
+
+                    // ***********************
+                    // TRANSFER CW20 TO SENDER
+                    // ***********************
+                    // convert Asset to PaymentAsset
+                    let payment_item = PaymentAsset::from(order_components.offer[0].item.clone());
+
+                    // execute cw20 transfer msg from offerer to info.sender
+                    match &payment_item {
+                        PaymentAsset::Cw20 {
+                            contract_address: _,
+                            amount: _,
+                        } => {
+                            let payment_messages = self.payment_with_royalty(
+                                &deps,
+                                contract_address.clone(),
+                                token_id.as_ref().unwrap().clone(),
+                                payment_item.clone(),
+                                offerer,
+                                info.sender,
+                            );
+
+                            // loop through all payment messages and add item to response to execute
+                            for payment_message in payment_messages {
+                                res = res.add_message(payment_message);
+                            }
+                        }
+                        _ => {
+                            return Err(ContractError::CustomError {
+                                val: ("Invalid Offer funding type".to_string()),
+                            });
+                        }
+                    }
+
+                    // ***********************
+                    // TRANSFER NFT TO OFFERER
+                    // ***********************
+                    // message to transfer nft to offerer
+                    let transfer_nft_msg = WasmMsg::Execute {
+                        contract_addr: contract_address.clone().to_string(),
+                        msg: to_binary(&Cw2981ExecuteMsg::TransferNft {
+                            recipient: order_components.offerer.clone().to_string(),
+                            token_id: token_id.clone().unwrap(),
+                        })?,
+                        funds: vec![],
+                    };
+
+                    // add transfer nft message to response to execute
+                    res = res.add_message(transfer_nft_msg);
+
+                    res = res.add_attribute("method", "execute_accept_nft_offer");
+
+                    // After the offer is accepted, we will delete the order
+                    self.offers.remove(deps.storage, order_key)?;
+
+                    Ok(res)
+                }
+                // if the consideration item is not Nft, then return error
+                _ => Err(ContractError::CustomError {
+                    val: ("Consideration is not NFT".to_string()),
+                }),
+            }
+        } else {
+            Err(ContractError::CustomError {
+                val: ("Collection offer is not supported".to_string()),
+            })
         }
     }
 
@@ -692,36 +663,29 @@ impl MarketplaceContract<'static> {
         deps: DepsMut,
         env: Env,
         info: MessageInfo,
-        nft: Asset,
+        nft: NFT,
     ) -> Result<Response, ContractError> {
-        match nft {
-            Asset::Nft {
-                contract_address,
-                token_id,
-            } => {
-                // match if the token_id is exist, then this order is offer for a specific nft
-                if let Some(token_id) = token_id {
-                    // generate order key based on the sender address, contract address and token id
-                    let order_key = order_key(&info.sender, &contract_address, &token_id);
+        let contract_address = nft.contract_address;
+        let token_id = nft.token_id;
 
-                    // we will remove the cancelled offer
-                    self.offers.remove(deps.storage, order_key)?;
+        // match if the token_id is exist, then this order is offer for a specific nft
+        if let Some(token_id) = token_id {
+            // generate order key based on the sender address, contract address and token id
+            let order_key = order_key(&info.sender, &contract_address, &token_id);
 
-                    Ok(Response::new()
-                        .add_attribute("method", "cancel an offer")
-                        .add_attribute("user", info.sender.to_string())
-                        .add_attribute("contract_address", contract_address.to_string())
-                        .add_attribute("token_id", token_id)
-                        .add_attribute("cancelled_at", env.block.time.to_string()))
-                } else {
-                    Err(ContractError::CustomError {
-                        val: ("Collection offer is not supported".to_string()),
-                    })
-                }
-            }
-            _ => Err(ContractError::CustomError {
-                val: ("Invalid NFT".to_string()),
-            }),
+            // we will remove the cancelled offer
+            self.offers.remove(deps.storage, order_key)?;
+
+            Ok(Response::new()
+                .add_attribute("method", "cancel an offer")
+                .add_attribute("user", info.sender.to_string())
+                .add_attribute("contract_address", contract_address.to_string())
+                .add_attribute("token_id", token_id)
+                .add_attribute("cancelled_at", env.block.time.to_string()))
+        } else {
+            Err(ContractError::CustomError {
+                val: ("Collection offer is not supported".to_string()),
+            })
         }
     }
 

@@ -13,19 +13,28 @@ pub enum OrderType {
 }
 
 #[cw_serde]
+pub struct NFT {
+    pub contract_address: Addr,
+    pub token_id: Option<String>,
+}
+
+#[cw_serde]
+pub struct CW20 {
+    pub contract_address: Addr,
+    pub amount: u128,
+}
+
+#[cw_serde]
+pub struct NATIVE {
+    pub denom: String,
+    pub amount: u128,
+}
+
+#[cw_serde]
 pub enum Asset {
-    Nft {
-        contract_address: Addr,
-        token_id: Option<String>,
-    },
-    Native {
-        denom: String,
-        amount: u128,
-    },
-    Cw20 {
-        contract_address: Addr,
-        amount: u128,
-    },
+    Nft(NFT),
+    Native(NATIVE),
+    Cw20(CW20),
 }
 
 #[cw_serde]
@@ -43,11 +52,11 @@ pub enum PaymentAsset {
 impl From<Asset> for PaymentAsset {
     fn from(asset: Asset) -> Self {
         match asset {
-            Asset::Native { denom, amount } => PaymentAsset::Native { denom, amount },
-            Asset::Cw20 {
+            Asset::Native(NATIVE { denom, amount }) => PaymentAsset::Native { denom, amount },
+            Asset::Cw20(CW20 {
                 contract_address,
                 amount,
-            } => PaymentAsset::Cw20 {
+            }) => PaymentAsset::Cw20 {
                 contract_address,
                 amount,
             },

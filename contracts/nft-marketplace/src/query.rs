@@ -3,7 +3,7 @@ use cw_storage_plus::Bound;
 
 use crate::{
     msg::{ListingsResponse, OffersResponse},
-    order_state::{order_key, Asset, OrderType},
+    order_state::{order_key, Asset, OrderType, NFT},
     state::{listing_key, AuctionConfig, Listing, ListingKey, MarketplaceContract},
 };
 
@@ -84,10 +84,10 @@ impl MarketplaceContract<'static> {
         if let (Some(item), Some(offerer)) = (item.clone(), offerer.clone()) {
             // match type of item
             match item {
-                Asset::Nft {
+                Asset::Nft(NFT {
                     contract_address,
                     token_id,
-                } => {
+                }) => {
                     // if token_is is not exist, return error
                     let token_id =
                         token_id.ok_or_else(|| StdError::generic_err("Token id is required"))?;
@@ -118,10 +118,10 @@ impl MarketplaceContract<'static> {
             let limit = limit.unwrap_or(30).min(30) as usize;
             // match type of item
             match item {
-                Asset::Nft {
+                Asset::Nft(NFT {
                     contract_address,
                     token_id,
-                } => {
+                }) => {
                     // if token_is is not exist, return error
                     let token_id =
                         token_id.ok_or_else(|| StdError::generic_err("Token id is required"))?;
