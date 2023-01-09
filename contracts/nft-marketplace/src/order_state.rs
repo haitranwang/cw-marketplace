@@ -15,7 +15,7 @@ pub enum OrderType {
 #[cw_serde]
 pub enum Asset {
     Nft {
-        nft_address: Addr,
+        contract_address: Addr,
         token_id: Option<String>,
     },
     Native {
@@ -23,15 +23,21 @@ pub enum Asset {
         amount: u128,
     },
     Cw20 {
-        token_address: Addr,
+        contract_address: Addr,
         amount: u128,
     },
 }
 
 #[cw_serde]
 pub enum PaymentAsset {
-    Native { denom: String, amount: u128 },
-    Cw20 { token_address: Addr, amount: u128 },
+    Native {
+        denom: String,
+        amount: u128,
+    },
+    Cw20 {
+        contract_address: Addr,
+        amount: u128,
+    },
 }
 
 impl From<Asset> for PaymentAsset {
@@ -39,10 +45,10 @@ impl From<Asset> for PaymentAsset {
         match asset {
             Asset::Native { denom, amount } => PaymentAsset::Native { denom, amount },
             Asset::Cw20 {
-                token_address,
+                contract_address,
                 amount,
             } => PaymentAsset::Cw20 {
-                token_address,
+                contract_address,
                 amount,
             },
             _ => panic!("Asset is not a payment asset"),

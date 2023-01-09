@@ -906,7 +906,7 @@ mod tests {
     ) -> Result<Response, ContractError> {
         let msg = ExecuteMsg::OfferNft {
             nft: Asset::Nft {
-                nft_address: contract_address,
+                contract_address,
                 token_id,
             },
             funds,
@@ -926,7 +926,7 @@ mod tests {
         let msg = ExecuteMsg::AcceptNftOffer {
             offerer: offerer.to_string(),
             nft: Asset::Nft {
-                nft_address: contract_address,
+                contract_address,
                 token_id,
             },
         };
@@ -952,7 +952,7 @@ mod tests {
                 Addr::unchecked(MOCK_CW2981_ADDR),
                 Some(MOCK_OFFER_NFT_TOKEN_ID_1.to_string()),
                 Asset::Cw20 {
-                    token_address: Addr::unchecked(MOCK_OFFER_CW20_ADDR),
+                    contract_address: Addr::unchecked(MOCK_OFFER_CW20_ADDR),
                     amount: 10000000,
                 },
                 Cw20Expiration::AtTime(block_time.plus_seconds(1000)),
@@ -976,7 +976,7 @@ mod tests {
                 Addr::unchecked(MOCK_CW2981_ADDR),
                 Some(MOCK_OFFER_NFT_TOKEN_ID_INVALID.to_string()),
                 Asset::Cw20 {
-                    token_address: Addr::unchecked(MOCK_OFFER_CW20_ADDR),
+                    contract_address: Addr::unchecked(MOCK_OFFER_CW20_ADDR),
                     amount: 10000000,
                 },
                 Cw20Expiration::AtTime(block_time.plus_seconds(1000)),
@@ -1005,7 +1005,7 @@ mod tests {
                 Addr::unchecked(MOCK_CW2981_ADDR),
                 Some(MOCK_OFFER_NFT_TOKEN_ID_1.to_string()),
                 Asset::Cw20 {
-                    token_address: Addr::unchecked(MOCK_OFFER_CW20_ADDR),
+                    contract_address: Addr::unchecked(MOCK_OFFER_CW20_ADDR),
                     amount: 10000000,
                 },
                 Cw20Expiration::AtTime(block_time.plus_seconds(1000)),
@@ -1034,7 +1034,7 @@ mod tests {
                 Addr::unchecked(MOCK_CW2981_ADDR),
                 None,
                 Asset::Cw20 {
-                    token_address: Addr::unchecked(MOCK_OFFER_CW20_ADDR),
+                    contract_address: Addr::unchecked(MOCK_OFFER_CW20_ADDR),
                     amount: 10000000,
                 },
                 Cw20Expiration::AtTime(block_time.plus_seconds(1000)),
@@ -1063,7 +1063,7 @@ mod tests {
                 Addr::unchecked(MOCK_CW2981_ADDR),
                 Some(MOCK_OFFER_NFT_TOKEN_ID_1.to_string()),
                 Asset::Cw20 {
-                    token_address: Addr::unchecked(MOCK_OFFER_CW20_ADDR),
+                    contract_address: Addr::unchecked(MOCK_OFFER_CW20_ADDR),
                     amount: 10000000,
                 },
                 Cw20Expiration::AtTime(block_time.plus_seconds(1000)),
@@ -1089,7 +1089,7 @@ mod tests {
                 Addr::unchecked(MOCK_CW2981_ADDR),
                 Some(MOCK_OFFER_NFT_TOKEN_ID_1.to_string()),
                 Asset::Cw20 {
-                    token_address: Addr::unchecked(MOCK_OFFER_CW20_ADDR),
+                    contract_address: Addr::unchecked(MOCK_OFFER_CW20_ADDR),
                     amount: 10000000,
                 },
                 Cw20Expiration::AtTime(block_time.plus_seconds(1000)),
@@ -1115,7 +1115,7 @@ mod tests {
                 Addr::unchecked(MOCK_CW2981_ADDR),
                 Some(MOCK_OFFER_NFT_TOKEN_ID_1.to_string()),
                 Asset::Cw20 {
-                    token_address: Addr::unchecked(MOCK_OFFER_CW20_ADDR),
+                    contract_address: Addr::unchecked(MOCK_OFFER_CW20_ADDR),
                     amount: 10000000,
                 },
                 Cw20Expiration::AtTime(block_time.minus_seconds(1_000)),
@@ -1429,7 +1429,7 @@ mod tests {
                 Addr::unchecked(MOCK_CW2981_ADDR),
                 Some(MOCK_OFFER_NFT_TOKEN_ID_1.to_string()),
                 Asset::Cw20 {
-                    token_address: Addr::unchecked(MOCK_OFFER_CW20_ADDR),
+                    contract_address: Addr::unchecked(MOCK_OFFER_CW20_ADDR),
                     amount: 10000000,
                 },
                 Cw20Expiration::AtTime(block_time.plus_seconds(1000)),
@@ -1519,11 +1519,11 @@ mod tests {
             // prepare offer nft message
             let offer_nft_msg = ExecuteMsg::OfferNft {
                 nft: Asset::Nft {
-                    nft_address: Addr::unchecked(cw2981_address.clone()),
+                    contract_address: Addr::unchecked(cw2981_address.clone()),
                     token_id: Some(MOCK_OFFER_NFT_TOKEN_ID_1.to_string()),
                 },
                 funds: Asset::Cw20 {
-                    token_address: Addr::unchecked(cw20_address.clone()),
+                    contract_address: Addr::unchecked(cw20_address.clone()),
                     amount: MOCK_OFFER_CW20_PRICE,
                 },
                 end_time: Cw20Expiration::AtTime(app.block_info().time.plus_seconds(1000)),
@@ -1576,7 +1576,7 @@ mod tests {
             let accept_offer_msg = ExecuteMsg::AcceptNftOffer {
                 offerer: USER_1.to_string(),
                 nft: Asset::Nft {
-                    nft_address: Addr::unchecked(cw2981_address.clone()),
+                    contract_address: Addr::unchecked(cw2981_address.clone()),
                     token_id: Some(MOCK_OFFER_NFT_TOKEN_ID_1.to_string()),
                 },
             };

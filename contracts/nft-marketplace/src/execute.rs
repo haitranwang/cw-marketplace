@@ -411,7 +411,7 @@ impl MarketplaceContract<'static> {
         match funds {
             // the funds must be cw20 token
             Asset::Cw20 {
-                token_address,
+                contract_address: token_address,
                 amount,
             } => {
                 // check that the allowance of the cw20 offer token is enough
@@ -452,14 +452,14 @@ impl MarketplaceContract<'static> {
                 // *******************
                 match nft {
                     Asset::Nft {
-                        nft_address,
+                        contract_address,
                         token_id,
                     } => {
                         if let Some(token_id) = token_id {
                             // query the owner of the nft to check if the nft exist
                             let owner_response: StdResult<cw721::OwnerOfResponse> =
                                 deps.querier.query_wasm_smart(
-                                    &nft_address,
+                                    &contract_address,
                                     &Cw721QueryMsg::OwnerOf {
                                         token_id: token_id.clone(),
                                         include_expired: Some(false),
@@ -482,13 +482,13 @@ impl MarketplaceContract<'static> {
                             }
 
                             // generate order key for order components based on user address, contract address and token id
-                            let order_key = order_key(&info.sender, &nft_address, &token_id);
+                            let order_key = order_key(&info.sender, &contract_address, &token_id);
 
                             // the offer item will contain the infomation of cw20 token
                             let offer_item = offer_item(
                                 &ItemType::CW20,
                                 &Asset::Cw20 {
-                                    token_address,
+                                    contract_address: token_address,
                                     amount,
                                 },
                                 &0u128,
@@ -499,7 +499,7 @@ impl MarketplaceContract<'static> {
                             let consideration_item = consideration_item(
                                 &ItemType::CW721,
                                 &Asset::Nft {
-                                    nft_address,
+                                    contract_address,
                                     token_id: Some(token_id),
                                 },
                                 &0u128,
@@ -569,13 +569,13 @@ impl MarketplaceContract<'static> {
     ) -> Result<Response, ContractError> {
         match nft {
             Asset::Nft {
-                nft_address,
+                contract_address,
                 token_id,
             } => {
                 // if the token_id is exist, then this order is offer for a specific nft
                 if let Some(token_id) = token_id {
                     // generate order key for order components based on user address, contract address and token id
-                    let order_key = order_key(&offerer, &nft_address, &token_id);
+                    let order_key = order_key(&offerer, &contract_address, &token_id);
 
                     // get order components
                     let order_components = self.offers.load(deps.storage, order_key.clone())?;
@@ -590,14 +590,14 @@ impl MarketplaceContract<'static> {
                     match &order_components.consideration[0].item {
                         // match if the consideration item is Nft
                         Asset::Nft {
-                            nft_address,
+                            contract_address,
                             token_id,
                         } => {
                             // query the owner of the nft
                             let owner: cw721::OwnerOfResponse = deps
                                 .querier
                                 .query_wasm_smart(
-                                    nft_address,
+                                    contract_address,
                                     &Cw721QueryMsg::OwnerOf {
                                         token_id: token_id.clone().unwrap(),
                                         include_expired: Some(false),
@@ -622,12 +622,12 @@ impl MarketplaceContract<'static> {
                             // execute cw20 transfer msg from offerer to info.sender
                             match &payment_item {
                                 PaymentAsset::Cw20 {
-                                    token_address: _,
+                                    contract_address: _,
                                     amount: _,
                                 } => {
                                     let payment_messages = self.payment_with_royalty(
                                         &deps,
-                                        nft_address.clone(),
+                                        contract_address.clone(),
                                         token_id.as_ref().unwrap().clone(),
                                         payment_item.clone(),
                                         offerer,
@@ -651,7 +651,7 @@ impl MarketplaceContract<'static> {
                             // ***********************
                             // message to transfer nft to offerer
                             let transfer_nft_msg = WasmMsg::Execute {
-                                contract_addr: nft_address.clone().to_string(),
+                                contract_addr: contract_address.clone().to_string(),
                                 msg: to_binary(&Cw2981ExecuteMsg::TransferNft {
                                     recipient: order_components.offerer.clone().to_string(),
                                     token_id: token_id.clone().unwrap(),
@@ -696,13 +696,13 @@ impl MarketplaceContract<'static> {
     ) -> Result<Response, ContractError> {
         match nft {
             Asset::Nft {
-                nft_address,
+                contract_address,
                 token_id,
             } => {
                 // match if the token_id is exist, then this order is offer for a specific nft
                 if let Some(token_id) = token_id {
                     // generate order key based on the sender address, contract address and token id
-                    let order_key = order_key(&info.sender, &nft_address, &token_id);
+                    let order_key = order_key(&info.sender, &contract_address, &token_id);
 
                     // we will remove the cancelled offer
                     self.offers.remove(deps.storage, order_key)?;
@@ -710,7 +710,7 @@ impl MarketplaceContract<'static> {
                     Ok(Response::new()
                         .add_attribute("method", "cancel an offer")
                         .add_attribute("user", info.sender.to_string())
-                        .add_attribute("contract_address", nft_address.to_string())
+                        .add_attribute("contract_address", contract_address.to_string())
                         .add_attribute("token_id", token_id)
                         .add_attribute("cancelled_at", env.block.time.to_string()))
                 } else {
@@ -769,7 +769,7 @@ impl MarketplaceContract<'static> {
         // Extract information from token
         let (is_native, token_info, amount) = match token {
             PaymentAsset::Cw20 {
-                token_address,
+                contract_address: token_address,
                 amount,
             } => (false, token_address.to_string(), Uint128::from(amount)),
             PaymentAsset::Native { denom, amount } => (true, denom, Uint128::from(amount)),

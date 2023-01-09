@@ -252,10 +252,10 @@
               "nft": {
                 "type": "object",
                 "required": [
-                  "nft_address"
+                  "contract_address"
                 ],
                 "properties": {
-                  "nft_address": {
+                  "contract_address": {
                     "$ref": "#/definitions/Addr"
                   },
                   "token_id": {
@@ -307,7 +307,7 @@
                 "type": "object",
                 "required": [
                   "amount",
-                  "token_address"
+                  "contract_address"
                 ],
                 "properties": {
                   "amount": {
@@ -315,7 +315,7 @@
                     "format": "uint128",
                     "minimum": 0.0
                   },
-                  "token_address": {
+                  "contract_address": {
                     "$ref": "#/definitions/Addr"
                   }
                 },
@@ -675,10 +675,10 @@
               "nft": {
                 "type": "object",
                 "required": [
-                  "nft_address"
+                  "contract_address"
                 ],
                 "properties": {
-                  "nft_address": {
+                  "contract_address": {
                     "$ref": "#/definitions/Addr"
                   },
                   "token_id": {
@@ -730,7 +730,7 @@
                 "type": "object",
                 "required": [
                   "amount",
-                  "token_address"
+                  "contract_address"
                 ],
                 "properties": {
                   "amount": {
@@ -738,7 +738,7 @@
                     "format": "uint128",
                     "minimum": 0.0
                   },
-                  "token_address": {
+                  "contract_address": {
                     "$ref": "#/definitions/Addr"
                   }
                 },
@@ -1513,10 +1513,10 @@
                 "nft": {
                   "type": "object",
                   "required": [
-                    "nft_address"
+                    "contract_address"
                   ],
                   "properties": {
-                    "nft_address": {
+                    "contract_address": {
                       "$ref": "#/definitions/Addr"
                     },
                     "token_id": {
@@ -1568,7 +1568,7 @@
                   "type": "object",
                   "required": [
                     "amount",
-                    "token_address"
+                    "contract_address"
                   ],
                   "properties": {
                     "amount": {
@@ -1576,7 +1576,7 @@
                       "format": "uint128",
                       "minimum": 0.0
                     },
-                    "token_address": {
+                    "contract_address": {
                       "$ref": "#/definitions/Addr"
                     }
                   },

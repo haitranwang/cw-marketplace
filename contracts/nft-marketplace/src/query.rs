@@ -85,7 +85,7 @@ impl MarketplaceContract<'static> {
             // match type of item
             match item {
                 Asset::Nft {
-                    nft_address,
+                    contract_address,
                     token_id,
                 } => {
                     // if token_is is not exist, return error
@@ -94,7 +94,7 @@ impl MarketplaceContract<'static> {
                     // generate order key
                     let order_key = order_key(
                         &deps.api.addr_validate(&offerer).unwrap(),
-                        &nft_address,
+                        &contract_address,
                         &token_id,
                     );
                     // load order
@@ -119,7 +119,7 @@ impl MarketplaceContract<'static> {
             // match type of item
             match item {
                 Asset::Nft {
-                    nft_address,
+                    contract_address,
                     token_id,
                 } => {
                     // if token_is is not exist, return error
@@ -131,7 +131,7 @@ impl MarketplaceContract<'static> {
                         .offers
                         .idx
                         .nfts
-                        .prefix((nft_address, token_id))
+                        .prefix((contract_address, token_id))
                         .range(deps.storage, None, None, Order::Descending)
                         .map(|item| item.map(|(_, order)| order))
                         .take(limit)
