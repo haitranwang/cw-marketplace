@@ -103,6 +103,7 @@ pub fn listings<'a>() -> IndexedMap<'a, ListingKey, Listing, ListingIndexes<'a>>
 #[cw_serde]
 pub struct Config {
     pub owner: Addr,
+    pub vaura_address: Addr,
 }
 
 // Auction Contract

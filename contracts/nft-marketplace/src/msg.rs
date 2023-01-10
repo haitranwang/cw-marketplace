@@ -3,7 +3,7 @@ use cosmwasm_std::Addr;
 use cw20::Expiration;
 
 use crate::{
-    order_state::{Asset, OrderComponents, CW20, NFT},
+    order_state::{Asset, OrderComponents, NFT},
     state::{AuctionConfig, AuctionContract, Listing},
 };
 
@@ -43,7 +43,7 @@ pub enum ExecuteMsg {
     // Offer a Nft
     OfferNft {
         nft: NFT,
-        funds: CW20,
+        funds_amount: u128,
         end_time: Expiration,
     },
     // Accept a Nft offer
@@ -57,6 +57,10 @@ pub enum ExecuteMsg {
     },
     // Cancel all offer of User
     CancelAllOffer {},
+    // edit contract address of vaura token
+    EditVauraToken {
+        token_address: String,
+    },
 }
 
 #[cw_serde]

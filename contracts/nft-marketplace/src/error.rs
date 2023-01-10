@@ -47,4 +47,7 @@ pub enum ContractError {
 
     #[error("Invalid end time")]
     InvalidEndTime {},
+
+    #[error("VAura address not set")]
+    VauraAddressNotSet {},
 }

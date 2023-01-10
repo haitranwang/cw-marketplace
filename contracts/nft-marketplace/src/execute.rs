@@ -398,9 +398,16 @@ impl MarketplaceContract<'static> {
         env: Env,
         info: MessageInfo,
         nft: NFT,
-        funds: CW20,
+        funds_amount: u128,
         end_time: Cw20Expiration,
     ) -> Result<Response, ContractError> {
+        // load config
+        let config = self.config.load(deps.storage)?;
+        // check ig the vaura_address is set (the default value is equal to "aura0")
+        if config.vaura_address == Addr::unchecked("aura0") {
+            return Err(ContractError::VauraAddressNotSet {});
+        }
+
         // check if the end time is valid
         if end_time.is_expired(&env.block) {
             return Err(ContractError::InvalidEndTime {});
@@ -408,8 +415,11 @@ impl MarketplaceContract<'static> {
         // ***********
         // OFFERING FUNDS
         // ***********
-        let token_address = funds.contract_address;
-        let amount = funds.amount;
+        // load config
+        let config = self.config.load(deps.storage)?;
+
+        let token_address = config.vaura_address;
+        let amount = funds_amount;
 
         // check that the allowance of the cw20 offer token is enough
         let allowance_response: AllowanceResponse = deps
@@ -715,6 +725,33 @@ impl MarketplaceContract<'static> {
             .add_attribute("method", "cancel all offer")
             .add_attribute("user", info.sender.to_string())
             .add_attribute("cancelled_at", env.block.time.to_string()))
+    }
+
+    pub fn execute_edit_vaura_token(
+        &self,
+        deps: DepsMut,
+        _env: Env,
+        info: MessageInfo,
+        token_address: String,
+    ) -> Result<Response, ContractError> {
+        // get owner
+        let mut conf = self.config.load(deps.storage)?;
+
+        // check if the sender is the owner
+        if conf.owner != info.sender {
+            return Err(ContractError::Unauthorized {});
+        }
+
+        // update vaura address in config
+        conf.vaura_address = Addr::unchecked(&token_address);
+        // conf.vaura_address = deps.api.addr_validate(&token_address)?;
+
+        // save config
+        self.config.save(deps.storage, &conf)?;
+
+        Ok(Response::new()
+            .add_attribute("method", "edit_vaura_token")
+            .add_attribute("vaura_token_address", token_address))
     }
 
     // function to process payment transfer with royalty

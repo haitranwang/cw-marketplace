@@ -157,15 +157,17 @@
             "type": "object",
             "required": [
               "end_time",
-              "funds",
+              "funds_amount",
               "nft"
             ],
             "properties": {
               "end_time": {
                 "$ref": "#/definitions/Expiration"
               },
-              "funds": {
-                "$ref": "#/definitions/CW20"
+              "funds_amount": {
+                "type": "integer",
+                "format": "uint128",
+                "minimum": 0.0
               },
               "nft": {
                 "$ref": "#/definitions/NFT"
@@ -230,6 +232,27 @@
         "properties": {
           "cancel_all_offer": {
             "type": "object",
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      {
+        "type": "object",
+        "required": [
+          "edit_vaura_token"
+        ],
+        "properties": {
+          "edit_vaura_token": {
+            "type": "object",
+            "required": [
+              "token_address"
+            ],
+            "properties": {
+              "token_address": {
+                "type": "string"
+              }
+            },
             "additionalProperties": false
           }
         },
@@ -329,24 +352,6 @@
           },
           "name": {
             "type": "string"
-          }
-        },
-        "additionalProperties": false
-      },
-      "CW20": {
-        "type": "object",
-        "required": [
-          "amount",
-          "contract_address"
-        ],
-        "properties": {
-          "amount": {
-            "type": "integer",
-            "format": "uint128",
-            "minimum": 0.0
-          },
-          "contract_address": {
-            "$ref": "#/definitions/Addr"
           }
         },
         "additionalProperties": false
@@ -903,10 +908,14 @@
       "title": "Config",
       "type": "object",
       "required": [
-        "owner"
+        "owner",
+        "vaura_address"
       ],
       "properties": {
         "owner": {
+          "$ref": "#/definitions/Addr"
+        },
+        "vaura_address": {
           "$ref": "#/definitions/Addr"
         }
       },

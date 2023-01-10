@@ -1,6 +1,6 @@
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
-use cosmwasm_std::{to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult};
+use cosmwasm_std::{to_binary, Addr, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult};
 use cw2::set_contract_version;
 
 use crate::error::ContractError;
@@ -18,7 +18,11 @@ pub fn instantiate(
     info: MessageInfo,
     msg: InstantiateMsg,
 ) -> Result<Response, ContractError> {
-    let conf = Config { owner: msg.owner };
+    // the default value of vaura_address is equal to "aura0" and MUST BE SET before offer nft
+    let conf = Config {
+        owner: msg.owner,
+        vaura_address: Addr::unchecked("aura0"),
+    };
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
     contract().config.save(deps.storage, &conf)?;
 
@@ -82,9 +86,9 @@ pub fn execute(
         // Implement Odering style
         ExecuteMsg::OfferNft {
             nft,
-            funds,
+            funds_amount,
             end_time,
-        } => contract().execute_offer_nft(deps, _env, info, nft, funds, end_time),
+        } => contract().execute_offer_nft(deps, _env, info, nft, funds_amount, end_time),
         ExecuteMsg::AcceptNftOffer { offerer, nft } => {
             contract().execute_accept_nft_offer(deps, _env, info, api.addr_validate(&offerer)?, nft)
         }
@@ -92,6 +96,9 @@ pub fn execute(
             contract().execute_cancel_nft_offer(deps, _env, info, nft)
         }
         ExecuteMsg::CancelAllOffer {} => contract().execute_cancel_all_offer(deps, _env, info),
+        ExecuteMsg::EditVauraToken { token_address } => {
+            contract().execute_edit_vaura_token(deps, _env, info, token_address)
+        }
     }
 }
 

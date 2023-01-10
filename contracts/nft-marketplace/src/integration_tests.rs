@@ -21,6 +21,8 @@ pub mod env {
     };
     use twilight_token::state::{InstantiateMsg as Cw20InstantiateMsg, MarketplaceInfo};
 
+    use crate::msg::ExecuteMsg as MarketPlaceExecuteMsg;
+
     // ****************************************
     // You MUST define the constants value here
     // ****************************************
@@ -165,7 +167,7 @@ pub mod env {
 
         // create instantiate message for contract
         let msg = InstantiateMsg {
-            owner: Addr::unchecked("owner"),
+            owner: Addr::unchecked(ADMIN),
         };
 
         // instantiate contract
@@ -223,6 +225,20 @@ pub mod env {
             contract_addr: contract_addr.to_string(),
             contract_code_id,
         });
+
+        // set the vaura token address in the marketplace contract
+        let set_vaura_token_msg = MarketPlaceExecuteMsg::EditVauraToken {
+            token_address: contract_addr.to_string(),
+        };
+
+        let res = app.execute_contract(
+            Addr::unchecked(ADMIN),
+            Addr::unchecked(marketplace_contract_addr),
+            &set_vaura_token_msg,
+            &[],
+        );
+        println!("res: {:?}", res);
+        assert!(res.is_ok());
 
         // return the app instance, the addresses and code IDs of all contracts
         (app, contract_info_vec)
