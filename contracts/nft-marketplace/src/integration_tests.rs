@@ -19,7 +19,7 @@ pub mod env {
     use twilight_token::contract::{
         execute as cw20_execute, instantiate as cw20_instantiate, query as cw20_query,
     };
-    use twilight_token::state::{InstantiateMsg as Cw20InstantiateMsg, MarketplaceInfo};
+    use twilight_token::state::InstantiateMsg as Cw20InstantiateMsg;
 
     use crate::msg::ExecuteMsg as MarketPlaceExecuteMsg;
 
@@ -202,10 +202,8 @@ pub mod env {
                 minter: marketplace_contract_addr.to_string(), // the minter of the cw20 token must be the marketplace contract
                 cap: Some(Uint128::new(TOKEN_INITIAL_BALANCE)),
             }),
-            marketplace_info: MarketplaceInfo {
-                marketplace_contract: marketplace_contract_addr.to_string(),
-                native_denom: NATIVE_DENOM.to_string(),
-            },
+            marketplace_address: marketplace_contract_addr.to_string(),
+            native_denom: NATIVE_DENOM.to_string(),
         };
 
         // instantiate contract
@@ -261,10 +259,8 @@ pub mod env {
                 minter: Addr::unchecked(ADMIN).to_string(),
                 cap: Some(Uint128::new(TOKEN_INITIAL_BALANCE)),
             }),
-            marketplace_info: MarketplaceInfo {
-                marketplace_contract: Addr::unchecked(ADMIN).to_string(),
-                native_denom: NATIVE_DENOM.to_string(),
-            },
+            marketplace_address: Addr::unchecked(ADMIN).to_string(),
+            native_denom: NATIVE_DENOM.to_string(),
         };
         let err = app
             .instantiate_contract(

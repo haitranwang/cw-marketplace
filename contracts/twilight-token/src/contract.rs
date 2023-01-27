@@ -13,7 +13,9 @@ use cw20_base::msg::{ExecuteMsg, QueryMsg};
 use cw20_base::state::{MinterData, TokenInfo, BALANCES, TOKEN_INFO};
 use cw20_base::ContractError;
 
-use crate::state::{InstantiateMsg, MarketplaceInfo, MARKETPLACE_INFO};
+use crate::state::{
+    InstantiateMsg, MarketplaceInfo, SupportedNative, MARKETPLACE_INFO, SUPPORTED_NATIVE,
+};
 
 // version info for migration info
 const CONTRACT_NAME: &str = "crates.io:cw20-base";
@@ -69,8 +71,14 @@ pub fn instantiate(
     MARKETPLACE_INFO.save(
         deps.storage,
         &MarketplaceInfo {
-            marketplace_contract: msg.marketplace_info.marketplace_contract,
-            native_denom: msg.marketplace_info.native_denom,
+            contract_address: msg.marketplace_address,
+        },
+    )?;
+
+    SUPPORTED_NATIVE.save(
+        deps.storage,
+        &SupportedNative {
+            denom: msg.native_denom,
         },
     )?;
 
@@ -111,7 +119,7 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
         QueryMsg::Allowance { owner, spender } => {
             let marketplace_info = MARKETPLACE_INFO.load(deps.storage)?;
-            if spender == marketplace_info.marketplace_contract {
+            if spender == marketplace_info.contract_address {
                 // if spender is marketplace contract, return cap of minter
                 to_binary(&marketplace_query_allowance(deps)?)
             } else {
@@ -149,7 +157,7 @@ pub fn marketplace_execute_burn(
         .ok_or(ContractError::Unauthorized {})?;
 
     // get the denom of SupportedNativeDenom
-    let native_denom = MARKETPLACE_INFO.load(deps.storage)?.native_denom;
+    let native_denom = SUPPORTED_NATIVE.load(deps.storage)?.denom;
     // check the balance of NATIVE_DENOM of contract
     let native_balance = deps
         .querier
@@ -208,7 +216,7 @@ pub fn marketplace_execute_mint(
 
     // check the funds are sent with the message
     // if the denom of funds is not the same as the native denom, we reject
-    let native_denom = MARKETPLACE_INFO.load(deps.storage)?.native_denom;
+    let native_denom = SUPPORTED_NATIVE.load(deps.storage)?.denom;
     if info.funds.len() != 1 || info.funds[0].denom != native_denom {
         return Err(ContractError::Unauthorized {});
     }
@@ -252,7 +260,7 @@ pub fn marketplace_execute_transfer_from(
 ) -> Result<Response, ContractError> {
     // this function is called by marketplace contract only
     // get marketplace address from mint data
-    let marketplace = MARKETPLACE_INFO.load(deps.storage)?.marketplace_contract;
+    let marketplace = MARKETPLACE_INFO.load(deps.storage)?.contract_address;
 
     // check if the sender is not minter
     if marketplace != info.sender {

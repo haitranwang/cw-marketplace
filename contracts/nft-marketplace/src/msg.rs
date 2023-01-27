@@ -39,7 +39,7 @@ pub enum ExecuteMsg {
         contract_address: String,
     },
 
-    // Implement Odering style
+    // Implement Ordering style
     // Offer a Nft
     OfferNft {
         nft: NFT,
