@@ -41,11 +41,10 @@ pub fn instantiate(
         return Err(StdError::generic_err("Initial balances must be empty").into());
     }
 
-    // create initial accounts
-    let total_supply = create_accounts(&mut deps, &msg.initial_balances)?;
+    let init_supply = Uint128::zero();
 
     if let Some(limit) = msg.get_cap() {
-        if total_supply > limit {
+        if init_supply > limit {
             return Err(StdError::generic_err("Initial supply greater than cap").into());
         }
     }
@@ -63,7 +62,7 @@ pub fn instantiate(
         name: msg.name,
         symbol: msg.symbol,
         decimals: msg.decimals,
-        total_supply,
+        total_supply: init_supply,
         mint,
     };
     TOKEN_INFO.save(deps.storage, &data)?;
