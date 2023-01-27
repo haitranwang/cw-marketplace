@@ -94,7 +94,10 @@ pub fn execute(
 ) -> Result<Response, ContractError> {
     match msg {
         ExecuteMsg::Burn { amount } => execute_burn(deps, env, info, amount),
-        ExecuteMsg::Mint { recipient, amount } => execute_mint(deps, env, info, recipient, amount),
+        ExecuteMsg::Mint {
+            recipient,
+            amount: _,
+        } => execute_mint(deps, env, info, recipient),
         ExecuteMsg::TransferFrom {
             owner,
             recipient,
@@ -194,10 +197,9 @@ pub fn execute_mint(
     _env: Env,
     info: MessageInfo,
     recipient: String,
-    amount: Uint128,
 ) -> Result<Response, ContractError> {
-    if amount == Uint128::zero() {
-        return Err(ContractError::InvalidZeroAmount {});
+    if info.funds[0].amount == Uint128::zero() {
+        return Err(ContractError::Unauthorized {});
     }
 
     let mut config = TOKEN_INFO
@@ -211,13 +213,8 @@ pub fn execute_mint(
         return Err(ContractError::Unauthorized {});
     }
 
-    // if funds smaller than amount, we reject
-    if info.funds[0].amount < amount {
-        return Err(ContractError::Unauthorized {});
-    }
-
     // update supply and enforce cap
-    config.total_supply += amount;
+    config.total_supply += info.funds[0].amount;
     if let Some(limit) = config.get_cap() {
         if config.total_supply > limit {
             return Err(ContractError::CannotExceedCap {});
@@ -230,13 +227,15 @@ pub fn execute_mint(
     BALANCES.update(
         deps.storage,
         &rcpt_addr,
-        |balance: Option<Uint128>| -> StdResult<_> { Ok(balance.unwrap_or_default() + amount) },
+        |balance: Option<Uint128>| -> StdResult<_> {
+            Ok(balance.unwrap_or_default() + info.funds[0].amount)
+        },
     )?;
 
     let res = Response::new()
         .add_attribute("action", "mint")
         .add_attribute("to", recipient)
-        .add_attribute("amount", amount);
+        .add_attribute("amount", info.funds[0].amount);
     Ok(res)
 }
 
