@@ -18,7 +18,7 @@ use crate::state::{
 };
 
 // version info for migration info
-const CONTRACT_NAME: &str = "crates.io:cw20-base";
+const CONTRACT_NAME: &str = "crates.io:vaura";
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 // this is the denominator of native token that is supported by this contract
