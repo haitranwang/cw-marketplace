@@ -8,7 +8,7 @@ use cosmwasm_std::{
 use cw2::set_contract_version;
 use cw20::{AllowanceResponse, Expiration};
 use cw20_base::allowances::query_allowance;
-use cw20_base::contract::{create_accounts, execute_update_minter, query as cw20_query};
+use cw20_base::contract::{execute_update_minter, query as cw20_query};
 use cw20_base::msg::{ExecuteMsg, QueryMsg};
 use cw20_base::state::{MinterData, TokenInfo, BALANCES, TOKEN_INFO};
 use cw20_base::ContractError;
@@ -26,7 +26,7 @@ pub static NATIVE_DENOM: &str = "uaura";
 
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn instantiate(
-    mut deps: DepsMut,
+    deps: DepsMut,
     _env: Env,
     _info: MessageInfo,
     msg: InstantiateMsg,
@@ -93,15 +93,13 @@ pub fn execute(
     msg: ExecuteMsg,
 ) -> Result<Response, ContractError> {
     match msg {
-        ExecuteMsg::Burn { amount } => marketplace_execute_burn(deps, env, info, amount),
-        ExecuteMsg::Mint { recipient, amount } => {
-            marketplace_execute_mint(deps, env, info, recipient, amount)
-        }
+        ExecuteMsg::Burn { amount } => execute_burn(deps, env, info, amount),
+        ExecuteMsg::Mint { recipient, amount } => execute_mint(deps, env, info, recipient, amount),
         ExecuteMsg::TransferFrom {
             owner,
             recipient,
             amount,
-        } => marketplace_execute_transfer_from(deps, env, info, owner, recipient, amount),
+        } => execute_transfer_from(deps, env, info, owner, recipient, amount),
         ExecuteMsg::UpdateMinter { new_minter } => {
             execute_update_minter(deps, env, info, new_minter)
         }
@@ -142,7 +140,7 @@ pub fn marketplace_query_allowance(deps: Deps) -> StdResult<AllowanceResponse> {
 }
 
 // After a user burn the token, contract will return the same amount of native token to him
-pub fn marketplace_execute_burn(
+pub fn execute_burn(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
@@ -199,7 +197,7 @@ pub fn marketplace_execute_burn(
 }
 
 // Every user send native token to this contract, and the contract will mint the same amount of token to the user.
-pub fn marketplace_execute_mint(
+pub fn execute_mint(
     deps: DepsMut,
     _env: Env,
     info: MessageInfo,
@@ -250,7 +248,7 @@ pub fn marketplace_execute_mint(
     Ok(res)
 }
 
-pub fn marketplace_execute_transfer_from(
+pub fn execute_transfer_from(
     deps: DepsMut,
     _env: Env,
     info: MessageInfo,
