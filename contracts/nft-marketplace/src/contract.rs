@@ -83,7 +83,7 @@ pub fn execute(
                 api.addr_validate(&contract_address)?,
             ),
 
-        // Implement Odering style
+        // Implement Ordering style
         ExecuteMsg::OfferNft {
             nft,
             funds_amount,
