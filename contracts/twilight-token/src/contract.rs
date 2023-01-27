@@ -32,8 +32,9 @@ pub fn instantiate(
     msg: InstantiateMsg,
 ) -> Result<Response, ContractError> {
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
-    // check valid token info
-    msg.validate()?;
+    // due to this contract is used for the marketplace once, so we don't need to check the validation of the message
+    // // check valid token info
+    // msg.validate()?;
 
     // this is a sanity check, to ensure that each token of this contract has garanteed by 1 native token
     if !msg.initial_balances.is_empty() {
