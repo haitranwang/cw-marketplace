@@ -142,7 +142,7 @@ pub fn marketplace_query_allowance(deps: Deps) -> StdResult<AllowanceResponse> {
 // After a user burn the token, contract will return the same amount of native token to him
 pub fn execute_burn(
     deps: DepsMut,
-    env: Env,
+    _env: Env,
     info: MessageInfo,
     amount: Uint128,
 ) -> Result<Response, ContractError> {
@@ -153,17 +153,6 @@ pub fn execute_burn(
     let _config = TOKEN_INFO
         .may_load(deps.storage)?
         .ok_or(ContractError::Unauthorized {})?;
-
-    // get the denom of SupportedNativeDenom
-    let native_denom = SUPPORTED_NATIVE.load(deps.storage)?.denom;
-    // check the balance of NATIVE_DENOM of contract
-    let native_balance = deps
-        .querier
-        .query_balance(env.contract.address, native_denom.clone())?;
-    // if the balance is not enough, return error
-    if native_balance.amount < amount {
-        return Err(StdError::generic_err("Not enough native token").into());
-    }
 
     // lower balance
     BALANCES.update(
@@ -178,6 +167,9 @@ pub fn execute_burn(
         info.total_supply = info.total_supply.checked_sub(amount)?;
         Ok(info)
     })?;
+
+    // get the denom of SupportedNativeDenom
+    let native_denom = SUPPORTED_NATIVE.load(deps.storage)?.denom;
 
     // return the native token to the userr
     let transfer_native_msg = BankMsg::Send {
