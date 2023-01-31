@@ -387,8 +387,6 @@ impl MarketplaceContract<'static> {
         Ok(Response::new().add_attribute("method", "remove_auction_contract"))
     }
 
-    // Implement ordering style
-
     // function to add new offer nft using ordering style
     // the 'offer' of offer_nft will contain the information of price
     // the 'consideration' of offer_nft will contain the information of nft

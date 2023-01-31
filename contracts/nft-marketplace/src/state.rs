@@ -150,7 +150,6 @@ pub struct MarketplaceContract<'a> {
     pub auction_contracts:
         IndexedMap<'a, AuctionContractKey, AuctionContract, AuctionContractIndexes<'a>>,
 
-    // Implement Ordering style
     pub offers: IndexedMap<'a, OrderKey, OrderComponents, OfferIndexes<'a>>,
 }
 
@@ -162,7 +161,6 @@ impl Default for MarketplaceContract<'static> {
             listings: listings(),
             auction_contracts: auction_contracts(),
 
-            // Implement Ordering style
             offers: orders(),
         }
     }

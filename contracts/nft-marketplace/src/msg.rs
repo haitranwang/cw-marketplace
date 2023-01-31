@@ -3,7 +3,7 @@ use cosmwasm_std::Addr;
 use cw20::Expiration;
 
 use crate::{
-    order_state::{Asset, OrderComponents, NFT},
+    order_state::{OrderComponents, NFT},
     state::{AuctionConfig, AuctionContract, Listing},
 };
 
@@ -39,7 +39,6 @@ pub enum ExecuteMsg {
         contract_address: String,
     },
 
-    // Implement Ordering style
     // Offer a Nft
     OfferNft {
         nft: NFT,
@@ -92,11 +91,26 @@ pub enum QueryMsg {
         code_id: u32,
         auction_config: AuctionConfig,
     },
-    // get list offers
+    // get the specific offer
+    #[returns(OrderComponents)]
+    Offer {
+        contract_address: String,
+        token_id: String,
+        offerer: String,
+    },
+    // get all offers of a nft
     #[returns(OffersResponse)]
-    Offers {
-        item: Option<Asset>,
-        offerer: Option<String>,
+    NftOffers {
+        contract_address: String,
+        token_id: String,
+        start_after_offerer: Option<String>,
+        limit: Option<u32>,
+    },
+    // get all offers of a user
+    #[returns(OffersResponse)]
+    UserOffers {
+        offerer: String,
+        start_after_nft: Option<NFT>,
         limit: Option<u32>,
     },
 }

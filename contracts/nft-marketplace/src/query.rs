@@ -1,9 +1,9 @@
-use cosmwasm_std::{Addr, Deps, Order, StdError, StdResult};
+use cosmwasm_std::{Addr, Deps, Order, StdResult};
 use cw_storage_plus::Bound;
 
 use crate::{
     msg::{ListingsResponse, OffersResponse},
-    order_state::{order_key, Asset, OrderType, NFT},
+    order_state::{order_key, OrderComponents, OrderKey, NFT},
     state::{listing_key, AuctionConfig, Listing, ListingKey, MarketplaceContract},
 };
 
@@ -65,102 +65,82 @@ impl MarketplaceContract<'static> {
             .load(deps.storage, contract_address)?;
 
         Ok(true)
-
-        // send a message to the auction contract to validate the config
-        // let msg = {};
-        // let res: crate::msg::ValidateAuctionConfigResponse = deps
-        //     .querier
-        //     .query_wasm_smart(auction_contract.contract_address, &msg)?;
     }
 
-    pub fn query_offers(
+    // query information of a specific offer
+    pub fn query_offer(
         self,
         deps: Deps,
-        item: Option<Asset>,
-        offerer: Option<String>,
+        contract_address: Addr,
+        token_id: String,
+        offerer: Addr,
+    ) -> StdResult<OrderComponents> {
+        let order_key = order_key(&offerer, &contract_address, &token_id);
+        self.offers.load(deps.storage, order_key)
+    }
+
+    // query all offers of a specific nft
+    pub fn query_nft_offers(
+        self,
+        deps: Deps,
+        contract_address: Addr,
+        token_id: String,
+        start_after_offerer: Option<String>,
         limit: Option<u32>,
     ) -> StdResult<OffersResponse> {
-        // if both item and offerer are exist, this is a query for a specific offer
-        if let (Some(item), Some(offerer)) = (item.clone(), offerer.clone()) {
-            // match type of item
-            match item {
-                Asset::Nft(NFT {
-                    contract_address,
-                    token_id,
-                }) => {
-                    // if token_is is not exist, return error
-                    let token_id =
-                        token_id.ok_or_else(|| StdError::generic_err("Token id is required"))?;
-                    // generate order key
-                    let order_key = order_key(
-                        &deps.api.addr_validate(&offerer).unwrap(),
-                        &contract_address,
-                        &token_id,
-                    );
-                    // load order
-                    let order = self.offers.load(deps.storage, order_key)?;
+        let limit = limit.unwrap_or(30).min(30) as usize;
 
-                    // if the type of order is not offer, return error
-                    if order.order_type != OrderType::OFFER {
-                        return Err(StdError::generic_err("This is not an offer"));
-                    }
+        let start: Option<Bound<OrderKey>> = start_after_offerer.map(|offerer| {
+            let order_key = order_key(
+                &deps.api.addr_validate(&offerer).unwrap(),
+                &contract_address,
+                &token_id,
+            );
+            Bound::exclusive(order_key)
+        });
 
-                    // return offer
-                    Ok(OffersResponse {
-                        offers: vec![order],
-                    })
-                }
-                _ => Err(StdError::generic_err("Unsupported asset type")),
-            }
-        }
-        // if there is only item, this is a query for all offer related a specific item
-        else if let Some(item) = item {
-            let limit = limit.unwrap_or(30).min(30) as usize;
-            // match type of item
-            match item {
-                Asset::Nft(NFT {
-                    contract_address,
-                    token_id,
-                }) => {
-                    // if token_is is not exist, return error
-                    let token_id =
-                        token_id.ok_or_else(|| StdError::generic_err("Token id is required"))?;
+        // load offers
+        let offers = self
+            .offers
+            .idx
+            .nfts
+            .prefix((contract_address, token_id))
+            .range(deps.storage, start, None, Order::Descending)
+            .map(|item| item.map(|(_, order)| order))
+            .take(limit)
+            .collect::<StdResult<Vec<_>>>()?;
 
-                    // load order
-                    let orders = self
-                        .offers
-                        .idx
-                        .nfts
-                        .prefix((contract_address, token_id))
-                        .range(deps.storage, None, None, Order::Descending)
-                        .map(|item| item.map(|(_, order)| order))
-                        .take(limit)
-                        .collect::<StdResult<Vec<_>>>()?;
-                    // return offer
-                    Ok(OffersResponse { offers: orders })
-                }
-                _ => Err(StdError::generic_err("Unsupported asset type")),
-            }
-        }
-        // if there is only offerer, this is a query for all offer related a specific offerer
-        else if let Some(offerer) = offerer {
-            let limit = limit.unwrap_or(30).min(30) as usize;
-            // load order
-            let orders = self
-                .offers
-                .idx
-                .users
-                .prefix(deps.api.addr_validate(&offerer)?)
-                .range(deps.storage, None, None, Order::Descending)
-                .map(|item| item.map(|(_, order)| order))
-                .take(limit)
-                .collect::<StdResult<Vec<_>>>()?;
-            // return offer
-            Ok(OffersResponse { offers: orders })
-        }
-        // aleast one of item and offerer must be exist
-        else {
-            Err(StdError::generic_err("Item or offerer is required"))
-        }
+        // return offers
+        Ok(OffersResponse { offers })
+    }
+
+    // query all offers of a specific user
+    pub fn query_user_offers(
+        self,
+        deps: Deps,
+        offerer: Addr,
+        start_after_nft: Option<NFT>,
+        limit: Option<u32>,
+    ) -> StdResult<OffersResponse> {
+        let limit = limit.unwrap_or(30).min(30) as usize;
+
+        let start: Option<Bound<OrderKey>> = start_after_nft.map(|nft| {
+            let order_key = order_key(&offerer, &nft.contract_address, &nft.token_id.unwrap());
+            Bound::exclusive(order_key)
+        });
+
+        // load offers
+        let offers = self
+            .offers
+            .idx
+            .users
+            .prefix(offerer)
+            .range(deps.storage, start, None, Order::Descending)
+            .map(|item| item.map(|(_, order)| order))
+            .take(limit)
+            .collect::<StdResult<Vec<_>>>()?;
+
+        // return offers
+        Ok(OffersResponse { offers })
     }
 }

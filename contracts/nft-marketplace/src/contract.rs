@@ -83,7 +83,6 @@ pub fn execute(
                 api.addr_validate(&contract_address)?,
             ),
 
-        // Implement Ordering style
         ExecuteMsg::OfferNft {
             nft,
             funds_amount,
@@ -139,10 +138,37 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
             code_id,
             auction_config,
         )?),
-        QueryMsg::Offers {
-            item,
+        QueryMsg::Offer {
+            contract_address,
+            token_id,
             offerer,
+        } => to_binary(&contract().query_offer(
+            deps,
+            api.addr_validate(&contract_address)?,
+            token_id,
+            api.addr_validate(&offerer)?,
+        )?),
+        QueryMsg::NftOffers {
+            contract_address,
+            token_id,
+            start_after_offerer,
             limit,
-        } => to_binary(&contract().query_offers(deps, item, offerer, limit)?),
+        } => to_binary(&contract().query_nft_offers(
+            deps,
+            api.addr_validate(&contract_address)?,
+            token_id,
+            start_after_offerer,
+            limit,
+        )?),
+        QueryMsg::UserOffers {
+            offerer,
+            start_after_nft,
+            limit,
+        } => to_binary(&contract().query_user_offers(
+            deps,
+            api.addr_validate(&offerer)?,
+            start_after_nft,
+            limit,
+        )?),
     }
 }
