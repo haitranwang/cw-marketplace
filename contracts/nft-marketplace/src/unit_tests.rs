@@ -1173,68 +1173,6 @@ mod tests {
             assert_eq!(balance.balance, Uint128::zero());
         }
 
-        // user cannot convert native token to twilight token because not provided enough funds
-        #[test]
-        fn user_cannot_convert_native_because_not_enough_funds() {
-            // get integration test app and contracts
-            let (mut app, contracts) = instantiate_contracts();
-            let cw20_address = contracts[2].contract_addr.clone();
-
-            // Mint 1000000000 native token to USER_1
-            app.sudo(cw_multi_test::SudoMsg::Bank(
-                cw_multi_test::BankSudo::Mint {
-                    to_address: USER_1.to_string(),
-                    amount: vec![Coin {
-                        amount: Uint128::from(1000000000u128),
-                        denom: NATIVE_DENOM.to_string(),
-                    }],
-                },
-            ))
-            .unwrap();
-
-            // query balance of USER_1 in twilight token
-            let balance: BalanceResponse = app
-                .wrap()
-                .query_wasm_smart(
-                    cw20_address.clone(),
-                    &cw20::Cw20QueryMsg::Balance {
-                        address: USER_1.to_string(),
-                    },
-                )
-                .unwrap();
-            assert_eq!(balance.balance, Uint128::zero());
-
-            // execute mint function to convert native token to twilight token
-            let response = app.execute_contract(
-                Addr::unchecked(USER_1.to_string()),
-                Addr::unchecked(cw20_address.clone()),
-                &cw20::Cw20ExecuteMsg::Mint {
-                    recipient: USER_1.to_string(),
-                    amount: Uint128::from(100000001u128),
-                },
-                &[Coin {
-                    amount: Uint128::from(100000000u128),
-                    denom: NATIVE_DENOM.to_string(),
-                }],
-            );
-            assert_eq!(
-                response.err().unwrap().source().unwrap().to_string(),
-                ContractError::Unauthorized {}.to_string()
-            );
-
-            // query balance of USER_1 in twilight token
-            let balance: BalanceResponse = app
-                .wrap()
-                .query_wasm_smart(
-                    cw20_address,
-                    &cw20::Cw20QueryMsg::Balance {
-                        address: USER_1.to_string(),
-                    },
-                )
-                .unwrap();
-            assert_eq!(balance.balance, Uint128::zero());
-        }
-
         // user can convert native token to twilight token by execute minting
         #[test]
         fn user_can_convert_native_token_success() {
@@ -1391,37 +1329,6 @@ mod tests {
         use cw2981_royalties::{Metadata, MintMsg};
         use cw721_base::msg::ExecuteMsg as Cw721ExecuteMsg;
         use cw_multi_test::Executor;
-
-        // // owner can accept offer
-        // #[test]
-        // fn owner_can_accept_offer() {
-        //     // prepare deps for test
-        //     let mut deps = mock_deps();
-
-        //     // get block time from mock env
-        //     let block_time = mock_env().block.time;
-
-        //     // create offer
-        //     create_offer(
-        //         deps.as_mut(),
-        //         MOCK_OFFER_NFT_OFFERER_1,
-        //         Addr::unchecked(MOCK_CW2981_ADDR),
-        //         Some(MOCK_OFFER_NFT_TOKEN_ID_1.to_string()),
-        //         10000000,
-        //         Cw20Expiration::AtTime(block_time.plus_seconds(1000)),
-        //     )
-        //     .unwrap();
-
-        //     // accept offer
-        //     let res = accept_offer(
-        //         deps.as_mut(),
-        //         MOCK_OFFER_NFT_OWNER,
-        //         MOCK_OFFER_NFT_OFFERER_1,
-        //         Addr::unchecked(MOCK_CW2981_ADDR),
-        //         Some(MOCK_OFFER_NFT_TOKEN_ID_1.to_string()),
-        //     );
-        //     assert!(res.is_ok());
-        // }
 
         // owner can accept offer
         #[test]
