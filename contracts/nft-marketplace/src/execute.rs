@@ -434,22 +434,6 @@ impl MarketplaceContract<'static> {
             return Err(ContractError::InsufficientAllowance {});
         }
 
-        // check that the balance of the cw20 offer token is enough
-        let balance_response: BalanceResponse = deps
-            .querier
-            .query_wasm_smart(
-                &token_address,
-                &Cw20QueryMsg::Balance {
-                    address: info.sender.to_string(),
-                },
-            )
-            .unwrap();
-
-        // if the balance is smaller the offer amount, return error
-        if balance_response.balance < Uint128::from(amount) {
-            return Err(ContractError::InsufficientBalance {});
-        }
-
         // *******************
         // CONSIDERATION ITEMS
         // *******************
