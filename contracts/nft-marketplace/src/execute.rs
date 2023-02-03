@@ -513,7 +513,7 @@ impl MarketplaceContract<'static> {
 
             // return success
             Ok(Response::new()
-                .add_attribute("method", "offer_nft")
+                .add_attribute("method", "create_offer")
                 .add_attribute("order_type", "OFFER")
                 .add_attribute("offerer", new_offer.offerer)
                 .add_attribute("offer", offer_str.unwrap())
