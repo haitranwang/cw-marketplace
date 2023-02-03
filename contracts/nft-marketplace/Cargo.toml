@@ -1,6 +1,6 @@
 [package]
 name = "nft-marketplace"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Vu Ngoc Quang <quang.vn@outlook.com>"]
 edition = "2021"
 
@@ -44,6 +44,7 @@ getrandom = {version = "0.2.7", default-features = false, features = ["js"]}
 cw20 = "1.0.1"
 cw20-base = { version = "1.0.1", features = ["library"] }
 twilight-token = { path = "../twilight-token", version = "0.16.0"}
+semver = "1"
 
 [dev-dependencies]
 cw-multi-test = "0.16.1"

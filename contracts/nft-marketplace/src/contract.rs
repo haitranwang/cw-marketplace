@@ -1,11 +1,15 @@
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
-use cosmwasm_std::{to_binary, Addr, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult};
+use cosmwasm_std::{
+    from_slice, to_binary, to_vec, Addr, Binary, Deps, DepsMut, Env, MessageInfo, Response,
+    StdError, StdResult,
+};
 use cw2::set_contract_version;
 
 use crate::error::ContractError;
-use crate::msg::{ExecuteMsg, InstantiateMsg, QueryMsg};
-use crate::state::{contract, Config, ListingStatus};
+use crate::msg::{ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg};
+use crate::order_state::orders;
+use crate::state::{contract, Config, ConfigOld, ListingStatus};
 
 // version info for migration info
 const CONTRACT_NAME: &str = "crates.io:nft-marketplace";
@@ -99,6 +103,26 @@ pub fn execute(
             contract().execute_edit_vaura_token(deps, _env, info, token_address)
         }
     }
+}
+
+#[cfg_attr(not(feature = "library"), entry_point)]
+pub fn migrate(deps: DepsMut, _env: Env, _msg: MigrateMsg) -> Result<Response, ContractError> {
+    let data_config = deps
+        .storage
+        .get(b"config")
+        .ok_or_else(|| StdError::not_found("Config"))?;
+    let config: ConfigOld = from_slice(&data_config)?;
+
+    // the default value of vaura_address is equal to "aura0" and MUST BE SET before offer nft
+    let conf = Config {
+        owner: config.owner,
+        vaura_address: Addr::unchecked("aura0"),
+    };
+    deps.storage.set(b"config", &to_vec(&conf)?);
+
+    contract().offers = orders();
+
+    Ok(Response::default())
 }
 
 #[cfg_attr(not(feature = "library"), entry_point)]

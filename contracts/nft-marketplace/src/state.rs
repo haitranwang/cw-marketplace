@@ -106,6 +106,12 @@ pub struct Config {
     pub vaura_address: Addr,
 }
 
+// we use this struct in the migration
+#[cw_serde]
+pub struct ConfigOld {
+    pub owner: Addr,
+}
+
 // Auction Contract
 // We index the list of auction contracts by their address
 // When they are upgraded, the new contract will decide to process a config or reject it based on code_id
