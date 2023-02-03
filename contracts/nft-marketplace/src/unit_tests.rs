@@ -1406,7 +1406,7 @@ mod tests {
                     token_id: Some(MOCK_OFFER_NFT_TOKEN_ID_1.to_string()),
                 },
                 funds_amount: MOCK_OFFER_CW20_PRICE,
-                end_time: Cw20Expiration::AtTime(app.block_info().time.plus_seconds(1000)),
+                end_time: Cw721Expiration::AtTime(app.block_info().time.plus_seconds(1000)),
             };
 
             // offerer (USER_1) creates offer

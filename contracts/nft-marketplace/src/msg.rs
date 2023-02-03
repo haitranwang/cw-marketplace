@@ -1,6 +1,6 @@
 use cosmwasm_schema::{cw_serde, QueryResponses};
 use cosmwasm_std::Addr;
-use cw20::Expiration;
+use cw721::Expiration;
 
 use crate::{
     order_state::{OrderComponents, NFT},

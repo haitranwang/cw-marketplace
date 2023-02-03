@@ -1,6 +1,6 @@
 use cosmwasm_schema::cw_serde;
 use cosmwasm_std::Addr;
-use cw20::Expiration;
+use cw721::Expiration;
 use cw_storage_plus::{Index, IndexList, IndexedMap, MultiIndex};
 
 pub type Nft = (Addr, String);

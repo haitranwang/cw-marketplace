@@ -12,9 +12,7 @@ use cosmwasm_std::{
     to_binary, Addr, BankMsg, Coin, CosmosMsg, DepsMut, Env, MessageInfo, Order, QueryRequest,
     Response, StdResult, Uint128, WasmMsg, WasmQuery,
 };
-use cw20::{
-    AllowanceResponse, BalanceResponse, Cw20ExecuteMsg, Cw20QueryMsg, Expiration as Cw20Expiration,
-};
+use cw20::{AllowanceResponse, BalanceResponse, Cw20ExecuteMsg, Cw20QueryMsg};
 use cw2981_royalties::{
     msg::RoyaltiesInfoResponse, ExecuteMsg as Cw2981ExecuteMsg, QueryMsg as Cw2981QueryMsg,
 };
@@ -397,7 +395,7 @@ impl MarketplaceContract<'static> {
         info: MessageInfo,
         nft: NFT,
         funds_amount: u128,
-        end_time: Cw20Expiration,
+        end_time: Cw721Expiration,
     ) -> Result<Response, ContractError> {
         // load config
         let config = self.config.load(deps.storage)?;
