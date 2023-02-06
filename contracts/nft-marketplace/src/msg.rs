@@ -49,6 +49,7 @@ pub enum ExecuteMsg {
     AcceptNftOffer {
         offerer: String,
         nft: NFT,
+        funds_amount: u128,
     },
     // Cancel a Nft offer
     CancelNftOffer {

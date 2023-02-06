@@ -92,9 +92,18 @@ pub fn execute(
             funds_amount,
             end_time,
         } => contract().execute_offer_nft(deps, _env, info, nft, funds_amount, end_time),
-        ExecuteMsg::AcceptNftOffer { offerer, nft } => {
-            contract().execute_accept_nft_offer(deps, _env, info, api.addr_validate(&offerer)?, nft)
-        }
+        ExecuteMsg::AcceptNftOffer {
+            offerer,
+            nft,
+            funds_amount,
+        } => contract().execute_accept_nft_offer(
+            deps,
+            _env,
+            info,
+            api.addr_validate(&offerer)?,
+            nft,
+            funds_amount,
+        ),
         ExecuteMsg::CancelNftOffer { nft } => {
             contract().execute_cancel_nft_offer(deps, _env, info, nft)
         }

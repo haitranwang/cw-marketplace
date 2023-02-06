@@ -1459,6 +1459,7 @@ mod tests {
                     contract_address: Addr::unchecked(cw2981_address.clone()),
                     token_id: Some(MOCK_OFFER_NFT_TOKEN_ID_1.to_string()),
                 },
+                funds_amount: MOCK_OFFER_CW20_PRICE,
             };
 
             // owner (ADMIN) accepts offer

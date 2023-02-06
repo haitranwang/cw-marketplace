@@ -12,7 +12,7 @@ use cosmwasm_std::{
     to_binary, Addr, BankMsg, Coin, CosmosMsg, DepsMut, Env, MessageInfo, Order, QueryRequest,
     Response, StdResult, Uint128, WasmMsg, WasmQuery,
 };
-use cw20::{AllowanceResponse, BalanceResponse, Cw20ExecuteMsg, Cw20QueryMsg};
+use cw20::{AllowanceResponse, Cw20ExecuteMsg, Cw20QueryMsg};
 use cw2981_royalties::{
     msg::RoyaltiesInfoResponse, ExecuteMsg as Cw2981ExecuteMsg, QueryMsg as Cw2981QueryMsg,
 };
@@ -536,6 +536,7 @@ impl MarketplaceContract<'static> {
         info: MessageInfo,
         offerer: Addr,
         nft: NFT,
+        funds_amount: u128,
     ) -> Result<Response, ContractError> {
         let contract_address = nft.contract_address;
         let token_id = nft.token_id;
@@ -553,7 +554,6 @@ impl MarketplaceContract<'static> {
                     val: ("Offer is expired".to_string()),
                 });
             }
-
             match &order_components.consideration[0].item {
                 // match if the consideration item is Nft
                 Asset::Nft(NFT {
@@ -589,8 +589,13 @@ impl MarketplaceContract<'static> {
                     match &payment_item {
                         PaymentAsset::Cw20 {
                             contract_address: _,
-                            amount: _,
+                            amount,
                         } => {
+                            if funds_amount < *amount {
+                                return Err(ContractError::CustomError {
+                                    val: ("Insufficient funds".to_string()),
+                                });
+                            }
                             let payment_messages = self.payment_with_royalty(
                                 &deps,
                                 contract_address.clone(),

@@ -187,10 +187,16 @@
           "accept_nft_offer": {
             "type": "object",
             "required": [
+              "funds_amount",
               "nft",
               "offerer"
             ],
             "properties": {
+              "funds_amount": {
+                "type": "integer",
+                "format": "uint128",
+                "minimum": 0.0
+              },
               "nft": {
                 "$ref": "#/definitions/NFT"
               },
