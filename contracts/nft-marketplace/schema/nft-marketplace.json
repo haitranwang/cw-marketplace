@@ -238,6 +238,17 @@
         "properties": {
           "cancel_all_offer": {
             "type": "object",
+            "required": [
+              "nfts"
+            ],
+            "properties": {
+              "nfts": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/definitions/NFT"
+                }
+              }
+            },
             "additionalProperties": false
           }
         },

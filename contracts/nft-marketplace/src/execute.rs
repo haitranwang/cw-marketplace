@@ -9,8 +9,8 @@ use crate::{
     ContractError,
 };
 use cosmwasm_std::{
-    to_binary, Addr, BankMsg, Coin, CosmosMsg, DepsMut, Env, MessageInfo, Order, QueryRequest,
-    Response, StdResult, Uint128, WasmMsg, WasmQuery,
+    to_binary, Addr, BankMsg, Coin, CosmosMsg, DepsMut, Env, MessageInfo, QueryRequest, Response,
+    StdResult, Uint128, WasmMsg, WasmQuery,
 };
 use cw20::{AllowanceResponse, Cw20ExecuteMsg, Cw20QueryMsg};
 use cw2981_royalties::{
@@ -692,19 +692,19 @@ impl MarketplaceContract<'static> {
         deps: DepsMut,
         env: Env,
         info: MessageInfo,
+        nfts: Vec<NFT>,
     ) -> Result<Response, ContractError> {
-        // get all orders of info.sender
-        let order_keys = self
-            .offers
-            .idx
-            .users
-            .prefix(deps.api.addr_validate(info.sender.as_ref())?)
-            .range(deps.storage, None, None, Order::Descending)
-            .map(|item| item.map(|(key, _)| key))
-            .collect::<StdResult<Vec<_>>>()?;
+        // if the number of nfts is greater than 50, then return error
+        if nfts.len() > 50 {
+            return Err(ContractError::CustomError {
+                val: ("Number of NFTs is greater than 50".to_string()),
+            });
+        }
 
-        // loop through all orders
-        for order_key in order_keys {
+        // loop through all nfts
+        for nft in nfts {
+            // generate order key based on the sender address, nft.contract_address and nft.token_id
+            let order_key = order_key(&info.sender, &nft.contract_address, &nft.token_id.unwrap());
             // we will remove the cancelled offer
             self.offers.remove(deps.storage, order_key)?;
         }

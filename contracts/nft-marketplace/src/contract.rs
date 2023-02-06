@@ -107,7 +107,9 @@ pub fn execute(
         ExecuteMsg::CancelNftOffer { nft } => {
             contract().execute_cancel_nft_offer(deps, _env, info, nft)
         }
-        ExecuteMsg::CancelAllOffer {} => contract().execute_cancel_all_offer(deps, _env, info),
+        ExecuteMsg::CancelAllOffer { nfts } => {
+            contract().execute_cancel_all_offer(deps, _env, info, nfts)
+        }
         ExecuteMsg::EditVauraToken { token_address } => {
             contract().execute_edit_vaura_token(deps, _env, info, token_address)
         }

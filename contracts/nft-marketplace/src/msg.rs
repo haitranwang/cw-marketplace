@@ -56,7 +56,9 @@ pub enum ExecuteMsg {
         nft: NFT,
     },
     // Cancel all offer of User
-    CancelAllOffer {},
+    CancelAllOffer {
+        nfts: Vec<NFT>,
+    },
     // edit contract address of vaura token
     EditVauraToken {
         token_address: String,
