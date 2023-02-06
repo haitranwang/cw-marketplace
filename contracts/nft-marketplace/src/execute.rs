@@ -633,12 +633,15 @@ impl MarketplaceContract<'static> {
                     // add transfer nft message to response to execute
                     res = res.add_message(transfer_nft_msg);
 
-                    res = res.add_attribute("method", "execute_accept_nft_offer");
-
                     // After the offer is accepted, we will delete the order
                     self.offers.remove(deps.storage, order_key)?;
 
-                    Ok(res)
+                    Ok(res
+                        .add_attribute("method", "execute_accept_nft_offer")
+                        .add_attribute("owner", owner.owner)
+                        .add_attribute("offerer", order_components.offerer)
+                        .add_attribute("nft_contract_address", contract_address.to_string())
+                        .add_attribute("token_id", token_id.clone().unwrap()))
                 }
                 // if the consideration item is not Nft, then return error
                 _ => Err(ContractError::CustomError {
@@ -707,7 +710,7 @@ impl MarketplaceContract<'static> {
         }
 
         Ok(Response::new()
-            .add_attribute("method", "cancel all offer")
+            .add_attribute("method", "cancel_all_offer")
             .add_attribute("user", info.sender.to_string())
             .add_attribute("cancelled_at", env.block.time.to_string()))
     }
