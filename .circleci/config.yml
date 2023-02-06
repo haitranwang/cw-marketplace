@@ -5,6 +5,7 @@ workflows:
     jobs:
       - contract_nft_store
       - contract_nft_marketplace
+      - contract_twilight_token
       - lint
       - wasm-build
 
