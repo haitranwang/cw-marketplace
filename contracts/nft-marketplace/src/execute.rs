@@ -655,39 +655,7 @@ impl MarketplaceContract<'static> {
         }
     }
 
-    // function to cancel offer nft using ordering style
-    pub fn execute_cancel_nft_offer(
-        &self,
-        deps: DepsMut,
-        env: Env,
-        info: MessageInfo,
-        nft: NFT,
-    ) -> Result<Response, ContractError> {
-        let contract_address = nft.contract_address;
-        let token_id = nft.token_id;
-
-        // match if the token_id is exist, then this order is offer for a specific nft
-        if let Some(token_id) = token_id {
-            // generate order key based on the sender address, contract address and token id
-            let order_key = order_key(&info.sender, &contract_address, &token_id);
-
-            // we will remove the cancelled offer
-            self.offers.remove(deps.storage, order_key)?;
-
-            Ok(Response::new()
-                .add_attribute("method", "cancel an offer")
-                .add_attribute("user", info.sender.to_string())
-                .add_attribute("contract_address", contract_address.to_string())
-                .add_attribute("token_id", token_id)
-                .add_attribute("cancelled_at", env.block.time.to_string()))
-        } else {
-            Err(ContractError::CustomError {
-                val: ("Collection offer is not supported".to_string()),
-            })
-        }
-    }
-
-    pub fn execute_cancel_all_offer(
+    pub fn execute_cancel_offer(
         &self,
         deps: DepsMut,
         env: Env,
