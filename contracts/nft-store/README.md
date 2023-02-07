@@ -61,7 +61,7 @@ Go to a server (eg. github) and create a new upstream repo (called `YOUR-GIT-URL
 Then run the following:
 
 ```sh
-# this is needed to create a valid Cargo.lock file (see below)
+# This is needed to create a valid Cargo.lock file (see below)
 cargo check
 git branch -M main
 git add .
@@ -98,3 +98,5 @@ that have been published.
 Please replace this README file with information about your specific project. You can keep
 the `Developing.md` and `Publishing.md` files as useful referenced, but please set some
 proper description in the README.
+
+## Test
