@@ -673,6 +673,14 @@ impl MarketplaceContract<'static> {
         for nft in nfts {
             // generate order key based on the sender address, nft.contract_address and nft.token_id
             let order_key = order_key(&info.sender, &nft.contract_address, &nft.token_id.unwrap());
+
+            // check if the order exists
+            if !self.offers.has(deps.storage, order_key.clone()) {
+                return Err(ContractError::CustomError {
+                    val: ("Offer does not exist".to_string()),
+                });
+            }
+
             // we will remove the cancelled offer
             self.offers.remove(deps.storage, order_key)?;
         }
