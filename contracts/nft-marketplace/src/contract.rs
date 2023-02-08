@@ -1,11 +1,15 @@
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
-use cosmwasm_std::{to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult};
+use cosmwasm_std::{
+    from_slice, to_binary, to_vec, Addr, Binary, Deps, DepsMut, Env, MessageInfo, Response,
+    StdError, StdResult,
+};
 use cw2::set_contract_version;
 
 use crate::error::ContractError;
-use crate::msg::{ExecuteMsg, InstantiateMsg, QueryMsg};
-use crate::state::{contract, Config, ListingStatus};
+use crate::msg::{ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg};
+use crate::order_state::orders;
+use crate::state::{contract, Config, ConfigOld, ListingStatus};
 
 // version info for migration info
 const CONTRACT_NAME: &str = "crates.io:nft-marketplace";
@@ -18,7 +22,11 @@ pub fn instantiate(
     info: MessageInfo,
     msg: InstantiateMsg,
 ) -> Result<Response, ContractError> {
-    let conf = Config { owner: msg.owner };
+    // the default value of vaura_address is equal to "aura0" and MUST BE SET before offer nft
+    let conf = Config {
+        owner: msg.owner,
+        vaura_address: Addr::unchecked("aura0"),
+    };
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
     contract().config.save(deps.storage, &conf)?;
 
@@ -78,7 +86,49 @@ pub fn execute(
                 info,
                 api.addr_validate(&contract_address)?,
             ),
+
+        ExecuteMsg::OfferNft {
+            nft,
+            funds_amount,
+            end_time,
+        } => contract().execute_offer_nft(deps, _env, info, nft, funds_amount, end_time),
+        ExecuteMsg::AcceptNftOffer {
+            offerer,
+            nft,
+            funds_amount,
+        } => contract().execute_accept_nft_offer(
+            deps,
+            _env,
+            info,
+            api.addr_validate(&offerer)?,
+            nft,
+            funds_amount,
+        ),
+        ExecuteMsg::CancelOffer { nfts } => contract().execute_cancel_offer(deps, _env, info, nfts),
+        ExecuteMsg::EditVauraToken { token_address } => {
+            contract().execute_edit_vaura_token(deps, _env, info, token_address)
+        }
     }
+}
+
+#[cfg_attr(not(feature = "library"), entry_point)]
+pub fn migrate(deps: DepsMut, _env: Env, _msg: MigrateMsg) -> Result<Response, ContractError> {
+    let data_config = deps
+        .storage
+        .get(b"config")
+        .ok_or_else(|| StdError::not_found("Config"))?;
+    let config: ConfigOld = from_slice(&data_config)?;
+
+    // the default value of vaura_address is equal to "aura0" and MUST BE SET before offer nft
+    let conf = Config {
+        owner: config.owner,
+        vaura_address: Addr::unchecked("aura0"),
+    };
+    deps.storage.set(b"config", &to_vec(&conf)?);
+
+    contract().offers = orders();
+
+    Ok(Response::default())
 }
 
 #[cfg_attr(not(feature = "library"), entry_point)]
@@ -117,6 +167,38 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
             api.addr_validate(&contract_address)?,
             code_id,
             auction_config,
+        )?),
+        QueryMsg::Offer {
+            contract_address,
+            token_id,
+            offerer,
+        } => to_binary(&contract().query_offer(
+            deps,
+            api.addr_validate(&contract_address)?,
+            token_id,
+            api.addr_validate(&offerer)?,
+        )?),
+        QueryMsg::NftOffers {
+            contract_address,
+            token_id,
+            start_after_offerer,
+            limit,
+        } => to_binary(&contract().query_nft_offers(
+            deps,
+            api.addr_validate(&contract_address)?,
+            token_id,
+            start_after_offerer,
+            limit,
+        )?),
+        QueryMsg::UserOffers {
+            offerer,
+            start_after_nft,
+            limit,
+        } => to_binary(&contract().query_user_offers(
+            deps,
+            api.addr_validate(&offerer)?,
+            start_after_nft,
+            limit,
         )?),
     }
 }

@@ -245,9 +245,9 @@ impl StoreContract<'static> {
         let config = self.config.load(deps.storage)?;
 
         // there is no royalty, creator is the owner, or royalty amount is 0
-        if creator == None
+        if creator.is_none()
             || creator.as_ref().unwrap() == &config.owner
-            || royalty_amount == None
+            || royalty_amount.is_none()
             || royalty_amount.unwrap().is_zero()
         {
             // transfer all funds to seller
@@ -256,23 +256,22 @@ impl StoreContract<'static> {
                 amount: info.funds,
             };
             res = res.add_message(transfer_token_msg);
-        } else {
-            if royalty_amount.unwrap() > price.amount {
+        } else if let (Some(royalty_amount), Some(creator)) = (royalty_amount, creator) {
+            if royalty_amount > price.amount {
                 return Err(ContractError::CustomError {
                     val: (format!(
                         "Royalty amount is greater than price: {} {}",
-                        royalty_amount.unwrap(),
-                        price
+                        royalty_amount, price
                     )),
                 });
             }
 
             // transfer royalty to minter
             let transfer_token_minter_msg = BankMsg::Send {
-                to_address: creator.unwrap().to_string(),
+                to_address: creator.to_string(),
                 amount: vec![Coin {
                     denom: price.denom.clone(),
-                    amount: royalty_amount.unwrap(),
+                    amount: royalty_amount,
                 }],
             };
 
@@ -281,7 +280,7 @@ impl StoreContract<'static> {
                 to_address: config.owner.to_string(),
                 amount: vec![Coin {
                     denom: price.denom.clone(),
-                    amount: price.amount - royalty_amount.unwrap(),
+                    amount: price.amount - royalty_amount,
                 }],
             };
             res = res
