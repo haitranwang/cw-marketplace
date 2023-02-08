@@ -4,12 +4,15 @@ pub mod query;
 pub use query::{check_royalties, query_royalties_info};
 
 use cosmwasm_schema::cw_serde;
-use cosmwasm_std::{to_binary, Empty};
+use cosmwasm_std::{to_binary, Empty, StdError};
 use cw2::set_contract_version;
 use cw721_base::Cw721Contract;
-pub use cw721_base::{ContractError, InstantiateMsg, MintMsg, MinterResponse};
+pub use cw721_base::{
+    ContractError, InstantiateMsg as Cw721InstantiateMsg, MintMsg, MinterResponse,
+};
+use cw_storage_plus::Item;
 
-use crate::msg::Cw2981QueryMsg;
+use crate::msg::{Cw2981QueryMsg, InstantiateMsg};
 
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
@@ -47,6 +50,15 @@ pub struct Metadata {
     pub royalty_payment_address: Option<String>,
 }
 
+#[cw_serde]
+#[derive(Default)]
+pub struct Config {
+    pub royalty_percentage: Option<u64>,
+    pub royalty_payment_address: Option<String>,
+}
+
+pub const CONFIG: Item<Config> = Item::new("config");
+
 pub type Extension = Option<Metadata>;
 
 pub type MintExtension = Option<Extension>;
@@ -64,10 +76,26 @@ pub fn instantiate(
     info: MessageInfo,
     msg: InstantiateMsg,
 ) -> Result<Response, ContractError> {
-    let res = Cw2981Contract::default().instantiate(deps.branch(), env, info, msg)?;
+    // create InstantiateMsg for cw721-base
+    let msg_721 = Cw721InstantiateMsg {
+        name: msg.name,
+        symbol: msg.symbol,
+        minter: msg.minter,
+    };
+    let res = Cw2981Contract::default().instantiate(deps.branch(), env, info, msg_721)?;
     // Explicitly set contract name and version, otherwise set to cw721-base info
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)
         .map_err(ContractError::Std)?;
+
+    // set royalty_percentage and royalty_payment_address
+    CONFIG.save(
+        deps.storage,
+        &Config {
+            royalty_percentage: msg.royalty_percentage,
+            royalty_payment_address: msg.royalty_payment_address,
+        },
+    )?;
+
     Ok(res)
 }
 
@@ -78,7 +106,40 @@ pub fn execute(
     info: MessageInfo,
     msg: ExecuteMsg,
 ) -> Result<Response, ContractError> {
-    Cw2981Contract::default().execute(deps, env, info, msg)
+    // match msg if it is mint message
+    match msg {
+        ExecuteMsg::Mint(msg) => {
+            // if royalty_percentage is set, then return error
+            if msg.extension.is_some()
+                && msg.clone().extension.unwrap().royalty_percentage.is_some()
+            {
+                Err(ContractError::Std(StdError::generic_err(
+                    "Cannot set royalty_percentage in mint message",
+                )))
+            } else {
+                // load config
+                let config = CONFIG.load(deps.storage)?;
+
+                // load extension from msg
+                let mut extension = msg.clone().extension.unwrap_or_default();
+
+                // set royalty_percentage and royalty_payment_address
+                extension.royalty_percentage = config.royalty_percentage;
+                extension.royalty_payment_address = config.royalty_payment_address;
+
+                // set royalty_payment_address to minter address
+                extension.royalty_payment_address = Some(info.sender.to_string());
+
+                Cw2981Contract::default().execute(
+                    deps,
+                    env,
+                    info,
+                    cw721_base::ExecuteMsg::Mint(msg),
+                )
+            }
+        }
+        _ => Cw2981Contract::default().execute(deps, env, info, msg),
+    }
 }
 
 #[cfg_attr(not(feature = "library"), entry_point)]
@@ -117,6 +178,8 @@ mod tests {
             name: "SpaceShips".to_string(),
             symbol: "SPACE".to_string(),
             minter: CREATOR.to_string(),
+            royalty_percentage: Some(50),
+            royalty_payment_address: Some("john".to_string()),
         };
         instantiate(deps.as_mut(), mock_env(), info.clone(), init_msg).unwrap();
 
@@ -149,6 +212,8 @@ mod tests {
             name: "SpaceShips".to_string(),
             symbol: "SPACE".to_string(),
             minter: CREATOR.to_string(),
+            royalty_percentage: Some(50),
+            royalty_payment_address: Some("john".to_string()),
         };
         instantiate(deps.as_mut(), mock_env(), info.clone(), init_msg).unwrap();
 
@@ -190,6 +255,8 @@ mod tests {
             name: "SpaceShips".to_string(),
             symbol: "SPACE".to_string(),
             minter: CREATOR.to_string(),
+            royalty_percentage: Some(50),
+            royalty_payment_address: Some("john".to_string()),
         };
         instantiate(deps.as_mut(), mock_env(), info.clone(), init_msg).unwrap();
 
