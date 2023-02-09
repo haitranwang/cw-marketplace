@@ -127,8 +127,9 @@ pub fn execute(
                 extension.royalty_percentage = config.royalty_percentage;
                 extension.royalty_payment_address = config.royalty_payment_address;
 
-                // set royalty_payment_address to minter address
-                extension.royalty_payment_address = Some(info.sender.to_string());
+                // set extension to msg
+                let mut msg = msg;
+                msg.extension = Some(extension);
 
                 Cw2981Contract::default().execute(
                     deps,
