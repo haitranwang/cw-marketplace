@@ -195,12 +195,21 @@ mod tests {
                 ..Metadata::default()
             }),
         };
+
+        let expected_extension = Some(Metadata {
+            description: Some("Spaceship with Warp Drive".into()),
+            name: Some("Starship USS Enterprise".to_string()),
+            royalty_percentage: Some(50),
+            royalty_payment_address: Some("john".to_string()),
+            ..Metadata::default()
+        });
+
         let exec_msg = ExecuteMsg::Mint(mint_msg.clone());
         execute(deps.as_mut(), mock_env(), info, exec_msg).unwrap();
 
         let res = contract.nft_info(deps.as_ref(), token_id.into()).unwrap();
         assert_eq!(res.token_uri, mint_msg.token_uri);
-        assert_eq!(res.extension, mint_msg.extension);
+        assert_eq!(res.extension, expected_extension);
     }
 
     #[test]
@@ -251,13 +260,15 @@ mod tests {
     fn check_token_royalties() {
         let mut deps = mock_dependencies();
 
+        let royalty_payment_address = "jeanluc".to_string();
+
         let info = mock_info(CREATOR, &[]);
         let init_msg = InstantiateMsg {
             name: "SpaceShips".to_string(),
             symbol: "SPACE".to_string(),
             minter: CREATOR.to_string(),
-            royalty_percentage: Some(50),
-            royalty_payment_address: Some("john".to_string()),
+            royalty_percentage: Some(10),
+            royalty_payment_address: Some(royalty_payment_address.clone()),
         };
         instantiate(deps.as_mut(), mock_env(), info.clone(), init_msg).unwrap();
 
@@ -269,16 +280,14 @@ mod tests {
             extension: Some(Metadata {
                 description: Some("Spaceship with Warp Drive".into()),
                 name: Some("Starship USS Enterprise".to_string()),
-                royalty_payment_address: Some("jeanluc".to_string()),
-                royalty_percentage: Some(10),
                 ..Metadata::default()
             }),
         };
-        let exec_msg = ExecuteMsg::Mint(mint_msg.clone());
+        let exec_msg = ExecuteMsg::Mint(mint_msg);
         execute(deps.as_mut(), mock_env(), info.clone(), exec_msg).unwrap();
 
         let expected = RoyaltiesInfoResponse {
-            address: mint_msg.owner,
+            address: royalty_payment_address.clone(),
             royalty_amount: Uint128::new(10),
         };
         let res =
@@ -306,19 +315,17 @@ mod tests {
             extension: Some(Metadata {
                 description: Some("Spaceship with Warp Drive".into()),
                 name: Some("Starship USS Voyager".to_string()),
-                royalty_payment_address: Some("janeway".to_string()),
-                royalty_percentage: Some(4),
                 ..Metadata::default()
             }),
         };
-        let voyager_exec_msg = ExecuteMsg::Mint(second_mint_msg.clone());
+        let voyager_exec_msg = ExecuteMsg::Mint(second_mint_msg);
         execute(deps.as_mut(), mock_env(), info, voyager_exec_msg).unwrap();
 
-        // 43 x 0.04 (i.e., 4%) should be 1.72
+        // 43 x 0.10 (i.e., 10%) should be 4.3
         // we expect this to be rounded down to 1
         let voyager_expected = RoyaltiesInfoResponse {
-            address: second_mint_msg.owner,
-            royalty_amount: Uint128::new(1),
+            address: royalty_payment_address,
+            royalty_amount: Uint128::new(4),
         };
 
         let res = query_royalties_info(

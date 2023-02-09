@@ -10,10 +10,10 @@ pub mod env {
         query as MarketPlaceQuery,
     };
     use crate::msg::InstantiateMsg;
+    use cw2981_royalties::msg::InstantiateMsg as Cw2981InstantiateMsg;
     use cw2981_royalties::{
         execute as cw2981_execute, instantiate as cw2981_instantiate, query as cw2981_query,
     };
-    use cw721_base::msg::InstantiateMsg as Cw2981InstantiateMsg;
 
     // The twilight token contract
     use twilight_token::contract::{
@@ -141,6 +141,8 @@ pub mod env {
             name: "NFT_A".to_string(),
             symbol: "NFT".to_string(),
             minter: ADMIN.to_string(),
+            royalty_percentage: Some(20),
+            royalty_payment_address: Some(ADMIN.to_string()),
         };
 
         // instantiate contract
