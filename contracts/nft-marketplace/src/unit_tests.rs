@@ -1357,8 +1357,8 @@ mod tests {
                     background_color: None,
                     animation_url: None,
                     youtube_url: None,
-                    royalty_percentage: Some(20),
-                    royalty_payment_address: Some(ADMIN.to_string()),
+                    royalty_percentage: None,
+                    royalty_payment_address: None,
                 },
             });
 
