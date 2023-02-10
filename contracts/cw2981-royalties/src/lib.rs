@@ -109,35 +109,32 @@ pub fn execute(
     // match msg if it is mint message
     match msg {
         ExecuteMsg::Mint(msg) => {
-            // if royalty_percentage is set, then return error
-            if msg.extension.is_some()
-                && msg.clone().extension.unwrap().royalty_percentage.is_some()
+            let mut extension = msg.extension.clone().unwrap_or_default();
+
+            // return error if royalty is set
+            if extension.royalty_percentage.is_some() || extension.royalty_payment_address.is_some()
             {
-                Err(ContractError::Std(StdError::generic_err(
-                    "Cannot set royalty_percentage in mint message",
-                )))
-            } else {
-                // load config
-                let config = CONFIG.load(deps.storage)?;
-
-                // load extension from msg
-                let mut extension = msg.clone().extension.unwrap_or_default();
-
-                // set royalty_percentage and royalty_payment_address
-                extension.royalty_percentage = config.royalty_percentage;
-                extension.royalty_payment_address = config.royalty_payment_address;
-
-                // set extension to msg
-                let mut msg = msg;
-                msg.extension = Some(extension);
-
-                Cw2981Contract::default().execute(
-                    deps,
-                    env,
-                    info,
-                    cw721_base::ExecuteMsg::Mint(msg),
-                )
+                return Err(ContractError::Std(StdError::generic_err(
+                    "Cannot set royalty information in mint message",
+                )));
             }
+
+            let config = CONFIG.load(deps.storage)?;
+
+            extension.royalty_percentage = config.royalty_percentage;
+            extension.royalty_payment_address = config.royalty_payment_address;
+
+            let msg_with_royalty = MintMsg {
+                extension: Some(extension),
+                ..msg
+            };
+
+            Cw2981Contract::default().execute(
+                deps,
+                env,
+                info,
+                cw721_base::ExecuteMsg::Mint(msg_with_royalty),
+            )
         }
         _ => Cw2981Contract::default().execute(deps, env, info, msg),
     }
