@@ -2,6 +2,21 @@ use cosmwasm_schema::cw_serde;
 use cosmwasm_std::{CustomMsg, Uint128};
 
 #[cw_serde]
+pub struct InstantiateMsg {
+    /// Name of the NFT contract
+    pub name: String,
+    /// Symbol of the NFT contract
+    pub symbol: String,
+
+    /// The minter is the only one who can create new NFTs.
+    /// This is designed for a base NFT that is controlled by an external program
+    /// or contract. You will likely replace this with custom logic in custom NFTs
+    pub minter: String,
+    pub royalty_percentage: Option<u64>,
+    pub royalty_payment_address: Option<String>,
+}
+
+#[cw_serde]
 pub enum Cw2981QueryMsg {
     /// Should be called on sale to see if royalties are owed
     /// by the marketplace selling the NFT, if CheckRoyalties

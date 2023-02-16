@@ -1,7 +1,9 @@
 #[cfg(test)]
 mod tests {
     use crate::contract::*;
+    use crate::integration_tests::env::{instantiate_contracts, ADMIN, USER_1};
     use crate::msg::{ExecuteMsg, InstantiateMsg, ListingsResponse, QueryMsg};
+    use crate::order_state::NFT;
     use crate::state::{contract, AuctionConfig, Config, ListingStatus};
     use crate::ContractError;
 
@@ -11,11 +13,31 @@ mod tests {
         MemoryStorage, OwnedDeps, Response, StdError, SubMsg, Timestamp, Uint128, WasmMsg,
         WasmQuery,
     };
+    use cw20::Expiration as Cw20Expiration;
     use cw2981_royalties::msg::{Cw2981QueryMsg, RoyaltiesInfoResponse};
     use cw2981_royalties::{ExecuteMsg as Cw2981ExecuteMsg, QueryMsg as Cw721QueryMsg};
-    use cw721::{Approval, ApprovalResponse, Expiration, OwnerOfResponse};
+    use cw721::{Approval, ApprovalResponse, Expiration as Cw721Expiration, OwnerOfResponse};
+
+    use cosmwasm_std::{BalanceResponse as BankBalanceResponse, BankQuery, Querier, QueryRequest};
+    use cw20::BalanceResponse;
+    use cw_multi_test::Executor;
+
+    use crate::integration_tests::env::{NATIVE_DENOM, NATIVE_DENOM_2};
 
     const MOCK_CW2981_ADDR: &str = "cw2981_addr";
+    const MOCK_OFFER_NFT_TOKEN_ID_1: &str = "1";
+    const MOCK_OFFER_NFT_TOKEN_ID_INVALID: &str = "invalid_id";
+
+    const MOCK_OFFER_CW20_ADDR: &str = "cw20_addr";
+    const MOCK_OFFER_CW20_AMOUNT: u128 = 1000000000;
+    const MOCK_OFFER_CW20_AMOUNT_MINIMUM: u128 = 1;
+    const MOCK_OFFER_CW20_PRICE: u128 = 10000000;
+
+    // const MOCK_OFFER_NFT_OWNER: &str = "owner";
+    // const MOCK_OFFER_NFT_CREATOR: &str = "creator";
+    // const MOCK_OFFER_NFT_OFFERER_1: &str = "offerer 1";
+    const MOCK_OFFER_NFT_OFFERER_INSUFFICIENT_BALANCE: &str = "offerer 2";
+    const MOCK_OFFER_NFT_OFFERER_INSUFFICIENT_ALLOWANCE: &str = "offerer 3";
 
     fn mock_deps() -> OwnedDeps<MemoryStorage, MockApi, MockQuerier> {
         let mut deps = mock_dependencies();
@@ -88,7 +110,7 @@ mod tests {
                                     to_binary(&ApprovalResponse {
                                         approval: Approval {
                                             spender: "owner".to_string(),
-                                            expires: Expiration::Never {},
+                                            expires: Cw721Expiration::Never {},
                                         },
                                     })
                                     .unwrap(),
@@ -96,18 +118,75 @@ mod tests {
                                 cosmwasm_std::SystemResult::Ok(result)
                             }
                             Cw721QueryMsg::OwnerOf {
-                                token_id: _,
+                                token_id,
                                 include_expired: _,
                             } => {
-                                // just return owner
-                                let result = ContractResult::Ok(
-                                    to_binary(&OwnerOfResponse {
-                                        owner: "owner".to_string(),
-                                        approvals: vec![],
-                                    })
-                                    .unwrap(),
-                                );
+                                if token_id == MOCK_OFFER_NFT_TOKEN_ID_INVALID {
+                                    let result = ContractResult::Err("Owner Not Found".to_string());
+                                    cosmwasm_std::SystemResult::Ok(result)
+                                } else {
+                                    // just return owner
+                                    let result = ContractResult::Ok(
+                                        to_binary(&OwnerOfResponse {
+                                            owner: "owner".to_string(),
+                                            approvals: vec![],
+                                        })
+                                        .unwrap(),
+                                    );
+
+                                    cosmwasm_std::SystemResult::Ok(result)
+                                }
+                            }
+                            _ => {
+                                let result = ContractResult::Err("Not Found".to_string());
                                 cosmwasm_std::SystemResult::Ok(result)
+                            }
+                        }
+                    }
+                    MOCK_OFFER_CW20_ADDR => {
+                        let query_msg = from_binary::<cw20_base::msg::QueryMsg>(msg).unwrap();
+                        match query_msg {
+                            cw20_base::msg::QueryMsg::Balance { address, .. } => {
+                                if address == MOCK_OFFER_NFT_OFFERER_INSUFFICIENT_BALANCE {
+                                    let result = ContractResult::Ok(
+                                        to_binary(&cw20::BalanceResponse {
+                                            balance: Uint128::from(MOCK_OFFER_CW20_AMOUNT_MINIMUM),
+                                        })
+                                        .unwrap(),
+                                    );
+                                    cosmwasm_std::SystemResult::Ok(result)
+                                } else {
+                                    let result = ContractResult::Ok(
+                                        to_binary(&cw20::BalanceResponse {
+                                            balance: Uint128::from(MOCK_OFFER_CW20_AMOUNT),
+                                        })
+                                        .unwrap(),
+                                    );
+                                    cosmwasm_std::SystemResult::Ok(result)
+                                }
+                            }
+                            cw20_base::msg::QueryMsg::Allowance { owner, spender: _ } => {
+                                if owner == MOCK_OFFER_NFT_OFFERER_INSUFFICIENT_ALLOWANCE {
+                                    let result = ContractResult::Ok(
+                                        to_binary(&cw20::AllowanceResponse {
+                                            allowance: Uint128::from(
+                                                MOCK_OFFER_CW20_AMOUNT_MINIMUM,
+                                            ),
+                                            expires: Cw20Expiration::Never {},
+                                        })
+                                        .unwrap(),
+                                    );
+                                    cosmwasm_std::SystemResult::Ok(result)
+                                } else {
+                                    let result = ContractResult::Ok(
+                                        to_binary(&cw20::AllowanceResponse {
+                                            allowance: Uint128::from(MOCK_OFFER_CW20_AMOUNT),
+                                            expires: Cw20Expiration::Never {},
+                                        })
+                                        .unwrap(),
+                                    );
+                                    cosmwasm_std::SystemResult::Ok(result)
+                                }
                             }
                             _ => {
                                 let result = ContractResult::Err("Not Found".to_string());
@@ -149,662 +228,1288 @@ mod tests {
         assert_eq!(Addr::unchecked("owner"), config.owner);
     }
 
-    fn create_listing(
-        deps: DepsMut,
-        sender: &str,
-        contract_address: Addr,
-        token_id: &str,
-        start_time: Option<Expiration>,
-        end_time: Option<Expiration>,
-    ) -> Result<Response, ContractError> {
-        let msg = ExecuteMsg::ListNft {
-            contract_address: contract_address.to_string(),
-            token_id: token_id.to_string(),
-            auction_config: AuctionConfig::FixedPrice {
-                price: Coin {
-                    denom: "uaura".to_string(),
-                    amount: Uint128::from(100u128),
+    mod listing {
+        use super::*;
+
+        fn create_listing(
+            deps: DepsMut,
+            sender: &str,
+            contract_address: Addr,
+            token_id: &str,
+            start_time: Option<Cw721Expiration>,
+            end_time: Option<Cw721Expiration>,
+        ) -> Result<Response, ContractError> {
+            let msg = ExecuteMsg::ListNft {
+                contract_address: contract_address.to_string(),
+                token_id: token_id.to_string(),
+                auction_config: AuctionConfig::FixedPrice {
+                    price: Coin {
+                        denom: "uaura".to_string(),
+                        amount: Uint128::from(100u128),
+                    },
+                    start_time,
+                    end_time,
                 },
-                start_time,
-                end_time,
-            },
-        };
-        let info = mock_info(sender, &coins(1000, "uaura"));
-        execute(deps, mock_env(), info, msg)
-    }
+            };
+            let info = mock_info(sender, &coins(1000, "uaura"));
+            execute(deps, mock_env(), info, msg)
+        }
 
-    #[test]
-    fn anyone_can_create_listing() {
-        let mut deps = mock_deps();
+        #[test]
+        fn anyone_can_create_listing() {
+            let mut deps = mock_deps();
 
-        let response = create_listing(
-            deps.as_mut(),
-            "owner",
-            Addr::unchecked(MOCK_CW2981_ADDR),
-            "1",
-            None,
-            None,
-        );
-        println!("Response: {:?}", &response);
-        assert!(response.is_ok());
-    }
-
-    #[test]
-    fn cannot_update_listing_of_other() {
-        let mut deps = mock_deps();
-
-        let response = create_listing(
-            deps.as_mut(),
-            "owner",
-            Addr::unchecked(MOCK_CW2981_ADDR),
-            "1",
-            None,
-            None,
-        );
-        println!("Response: {:?}", &response);
-        assert!(response.is_ok());
-
-        let msg = ExecuteMsg::ListNft {
-            contract_address: Addr::unchecked(MOCK_CW2981_ADDR).to_string(),
-            token_id: "1".to_string(),
-            auction_config: AuctionConfig::FixedPrice {
-                price: Coin {
-                    denom: "uaura".to_string(),
-                    amount: Uint128::from(200u128),
-                },
-                start_time: None,
-                end_time: None,
-            },
-        };
-        let info = mock_info("another_user", &[]);
-        let response = execute(deps.as_mut(), mock_env(), info, msg);
-        println!("Response: {:?}", &response);
-        assert!(response.is_err());
-    }
-
-    #[test]
-    fn update_listing_by_owner() {
-        let mut deps = mock_deps();
-
-        let response = create_listing(
-            deps.as_mut(),
-            "owner",
-            Addr::unchecked(MOCK_CW2981_ADDR),
-            "1",
-            None,
-            None,
-        );
-
-        // listing created
-        assert!(response.is_ok());
-
-        // another user tries to update the listing
-        let err_response = create_listing(
-            deps.as_mut(),
-            "another_user",
-            Addr::unchecked(MOCK_CW2981_ADDR),
-            "1",
-            None,
-            None,
-        );
-
-        println!("Error Response: {:?}", &err_response);
-        assert!(err_response.is_err());
-
-        // owner tries to update the listing
-        let update_response = create_listing(
-            deps.as_mut(),
-            "owner",
-            Addr::unchecked(MOCK_CW2981_ADDR),
-            "1",
-            None,
-            None,
-        );
-
-        println!("Update Response: {:?}", &update_response);
-        assert!(update_response.is_ok());
-    }
-
-    #[test]
-    fn owner_cancel_listing() {
-        let mut deps = mock_deps();
-
-        create_listing(
-            deps.as_mut(),
-            "owner",
-            Addr::unchecked(MOCK_CW2981_ADDR),
-            "1",
-            None,
-            None,
-        )
-        .unwrap();
-
-        let listing = contract()
-            .query_listing(
-                deps.as_ref(),
+            let response = create_listing(
+                deps.as_mut(),
+                "owner",
                 Addr::unchecked(MOCK_CW2981_ADDR),
-                "1".to_string(),
-            )
-            .unwrap();
-        assert_eq!(listing.token_id, "1");
-
-        // cancel the listing
-        let msg = ExecuteMsg::Cancel {
-            contract_address: MOCK_CW2981_ADDR.to_string(),
-            token_id: "1".to_string(),
-        };
-
-        // send request with correct owner
-        let mock_info_correct = mock_info("owner", &[]);
-        let _response = execute(deps.as_mut(), mock_env(), mock_info_correct, msg).unwrap();
-        // println!("Response: {:?}", &response);
-
-        // assert error on load listing
-        let res = contract().query_listing(
-            deps.as_ref(),
-            Addr::unchecked(MOCK_CW2981_ADDR),
-            "1".to_string(),
-        );
-        println!("Response: {:?}", &res);
-        assert!(res.is_err());
-    }
-
-    #[test]
-    fn other_cannot_cancel_listing() {
-        let mut deps = mock_deps();
-
-        create_listing(
-            deps.as_mut(),
-            "owner",
-            Addr::unchecked(MOCK_CW2981_ADDR),
-            "1",
-            None,
-            None,
-        )
-        .unwrap();
-
-        // anyone try cancel the listing
-        let msg = ExecuteMsg::Cancel {
-            contract_address: MOCK_CW2981_ADDR.to_string(),
-            token_id: "1".to_string(),
-        };
-        let mock_info_wrong_sender = mock_info("anyone", &coins(100, "uaura"));
-
-        let response = execute(deps.as_mut(), mock_env(), mock_info_wrong_sender, msg);
-        match response {
-            Ok(_) => panic!("Expected error"),
-            Err(ContractError::Unauthorized {}) => {}
-            Err(e) => panic!("Unexpected error: {}", e),
-        }
-    }
-
-    #[test]
-    fn anyone_can_cancel_after_end_time() {
-        let mut deps = mock_deps();
-
-        create_listing(
-            deps.as_mut(),
-            "owner",
-            Addr::unchecked(MOCK_CW2981_ADDR),
-            "1",
-            None,
-            Some(Expiration::AtHeight(100)),
-        )
-        .unwrap();
-
-        let mut env = mock_env();
-        env.block.height = 99;
-
-        // anyone try cancel the listing
-        let msg = ExecuteMsg::Cancel {
-            contract_address: MOCK_CW2981_ADDR.to_string(),
-            token_id: "1".to_string(),
-        };
-        let mock_info_wrong_sender = mock_info("anyone", &coins(100, "uaura"));
-
-        let response = execute(
-            deps.as_mut(),
-            env.clone(),
-            mock_info_wrong_sender.clone(),
-            msg.clone(),
-        );
-        match response {
-            Ok(_) => panic!("Expected error"),
-            Err(ContractError::Unauthorized {}) => {}
-            Err(e) => panic!("Unexpected error: {}", e),
+                "1",
+                None,
+                None,
+            );
+            println!("Response: {:?}", &response);
+            assert!(response.is_ok());
         }
 
-        env.block.height = 101;
+        #[test]
+        fn cannot_update_listing_of_other() {
+            let mut deps = mock_deps();
 
-        let response = execute(deps.as_mut(), env, mock_info_wrong_sender, msg);
-        match response {
-            Ok(_) => {}
-            Err(e) => panic!("Unexpected error: {}", e),
+            let response = create_listing(
+                deps.as_mut(),
+                "owner",
+                Addr::unchecked(MOCK_CW2981_ADDR),
+                "1",
+                None,
+                None,
+            );
+            println!("Response: {:?}", &response);
+            assert!(response.is_ok());
+
+            let msg = ExecuteMsg::ListNft {
+                contract_address: Addr::unchecked(MOCK_CW2981_ADDR).to_string(),
+                token_id: "1".to_string(),
+                auction_config: AuctionConfig::FixedPrice {
+                    price: Coin {
+                        denom: "uaura".to_string(),
+                        amount: Uint128::from(200u128),
+                    },
+                    start_time: None,
+                    end_time: None,
+                },
+            };
+            let info = mock_info("another_user", &[]);
+            let response = execute(deps.as_mut(), mock_env(), info, msg);
+            println!("Response: {:?}", &response);
+            assert!(response.is_err());
         }
-    }
 
-    #[test]
-    fn can_query_by_contract_address() {
-        let mut deps = mock_deps();
+        #[test]
+        fn update_listing_by_owner() {
+            let mut deps = mock_deps();
 
-        for i in 0..5 {
+            let response = create_listing(
+                deps.as_mut(),
+                "owner",
+                Addr::unchecked(MOCK_CW2981_ADDR),
+                "1",
+                None,
+                None,
+            );
+
+            // listing created
+            assert!(response.is_ok());
+
+            // another user tries to update the listing
+            let err_response = create_listing(
+                deps.as_mut(),
+                "another_user",
+                Addr::unchecked(MOCK_CW2981_ADDR),
+                "1",
+                None,
+                None,
+            );
+
+            println!("Error Response: {:?}", &err_response);
+            assert!(err_response.is_err());
+
+            // owner tries to update the listing
+            let update_response = create_listing(
+                deps.as_mut(),
+                "owner",
+                Addr::unchecked(MOCK_CW2981_ADDR),
+                "1",
+                None,
+                None,
+            );
+
+            println!("Update Response: {:?}", &update_response);
+            assert!(update_response.is_ok());
+        }
+
+        #[test]
+        fn owner_cancel_listing() {
+            let mut deps = mock_deps();
+
             create_listing(
                 deps.as_mut(),
                 "owner",
                 Addr::unchecked(MOCK_CW2981_ADDR),
-                &format!("{:0>8}", i),
+                "1",
                 None,
                 None,
             )
             .unwrap();
+
+            let listing = contract()
+                .query_listing(
+                    deps.as_ref(),
+                    Addr::unchecked(MOCK_CW2981_ADDR),
+                    "1".to_string(),
+                )
+                .unwrap();
+            assert_eq!(listing.token_id, "1");
+
+            // cancel the listing
+            let msg = ExecuteMsg::Cancel {
+                contract_address: MOCK_CW2981_ADDR.to_string(),
+                token_id: "1".to_string(),
+            };
+
+            // send request with correct owner
+            let mock_info_correct = mock_info("owner", &[]);
+            let _response = execute(deps.as_mut(), mock_env(), mock_info_correct, msg).unwrap();
+            // println!("Response: {:?}", &response);
+
+            // assert error on load listing
+            let res = contract().query_listing(
+                deps.as_ref(),
+                Addr::unchecked(MOCK_CW2981_ADDR),
+                "1".to_string(),
+            );
+            println!("Response: {:?}", &res);
+            assert!(res.is_err());
         }
 
-        // now can query ongoing listings
-        let query_res = contract()
-            .query_listings_by_contract_address(
-                deps.as_ref(),
-                ListingStatus::Ongoing {}.name(),
+        #[test]
+        fn other_cannot_cancel_listing() {
+            let mut deps = mock_deps();
+
+            create_listing(
+                deps.as_mut(),
+                "owner",
                 Addr::unchecked(MOCK_CW2981_ADDR),
-                Some("".to_string()),
-                Some(10),
+                "1",
+                None,
+                None,
             )
             .unwrap();
 
-        println!("Query Response: {:?}", &query_res);
+            // anyone try cancel the listing
+            let msg = ExecuteMsg::Cancel {
+                contract_address: MOCK_CW2981_ADDR.to_string(),
+                token_id: "1".to_string(),
+            };
+            let mock_info_wrong_sender = mock_info("anyone", &coins(100, "uaura"));
 
-        assert_eq!(query_res.listings.len(), 5);
+            let response = execute(deps.as_mut(), mock_env(), mock_info_wrong_sender, msg);
+            match response {
+                Ok(_) => panic!("Expected error"),
+                Err(ContractError::Unauthorized {}) => {}
+                Err(e) => panic!("Unexpected error: {}", e),
+            }
+        }
 
-        // now cancel listing 3
-        let msg = ExecuteMsg::Cancel {
-            contract_address: MOCK_CW2981_ADDR.to_string(),
-            token_id: "00000003".to_string(),
-        };
-        let mock_info_correct = mock_info("owner", &coins(100, "uaura"));
-        let _response = execute(deps.as_mut(), mock_env(), mock_info_correct, msg).unwrap();
+        #[test]
+        fn anyone_can_cancel_after_end_time() {
+            let mut deps = mock_deps();
 
-        // now can query ongoing listings again
-        let query_msg = QueryMsg::ListingsByContractAddress {
-            contract_address: MOCK_CW2981_ADDR.to_string(),
-            start_after: Some("".to_string()),
-            limit: Some(10),
-        };
-        let query_res =
-            from_binary::<ListingsResponse>(&query(deps.as_ref(), mock_env(), query_msg).unwrap())
+            create_listing(
+                deps.as_mut(),
+                "owner",
+                Addr::unchecked(MOCK_CW2981_ADDR),
+                "1",
+                None,
+                Some(Cw721Expiration::AtHeight(100)),
+            )
+            .unwrap();
+
+            let mut env = mock_env();
+            env.block.height = 99;
+
+            // anyone try cancel the listing
+            let msg = ExecuteMsg::Cancel {
+                contract_address: MOCK_CW2981_ADDR.to_string(),
+                token_id: "1".to_string(),
+            };
+            let mock_info_wrong_sender = mock_info("anyone", &coins(100, "uaura"));
+
+            let response = execute(
+                deps.as_mut(),
+                env.clone(),
+                mock_info_wrong_sender.clone(),
+                msg.clone(),
+            );
+            match response {
+                Ok(_) => panic!("Expected error"),
+                Err(ContractError::Unauthorized {}) => {}
+                Err(e) => panic!("Unexpected error: {}", e),
+            }
+
+            env.block.height = 101;
+
+            let response = execute(deps.as_mut(), env, mock_info_wrong_sender, msg);
+            match response {
+                Ok(_) => {}
+                Err(e) => panic!("Unexpected error: {}", e),
+            }
+        }
+
+        #[test]
+        fn can_query_by_contract_address() {
+            let mut deps = mock_deps();
+
+            for i in 0..5 {
+                create_listing(
+                    deps.as_mut(),
+                    "owner",
+                    Addr::unchecked(MOCK_CW2981_ADDR),
+                    &format!("{:0>8}", i),
+                    None,
+                    None,
+                )
+                .unwrap();
+            }
+
+            // now can query ongoing listings
+            let query_res = contract()
+                .query_listings_by_contract_address(
+                    deps.as_ref(),
+                    ListingStatus::Ongoing {}.name(),
+                    Addr::unchecked(MOCK_CW2981_ADDR),
+                    Some("".to_string()),
+                    Some(10),
+                )
                 .unwrap();
 
-        println!("Query Response: {:?}", &query_res);
-        assert_eq!(query_res.listings.len(), 4);
-    }
+            println!("Query Response: {:?}", &query_res);
 
-    #[test]
-    fn cannot_buy_non_existent_listing() {
-        let mut deps = mock_deps();
+            assert_eq!(query_res.listings.len(), 5);
 
-        let msg = ExecuteMsg::Buy {
-            contract_address: MOCK_CW2981_ADDR.to_string(),
-            token_id: "1".to_string(),
-        };
+            // now cancel listing 3
+            let msg = ExecuteMsg::Cancel {
+                contract_address: MOCK_CW2981_ADDR.to_string(),
+                token_id: "00000003".to_string(),
+            };
+            let mock_info_correct = mock_info("owner", &coins(100, "uaura"));
+            let _response = execute(deps.as_mut(), mock_env(), mock_info_correct, msg).unwrap();
 
-        let mock_info_buyer = mock_info("buyer", &coins(100, "uaura"));
-        let response = execute(deps.as_mut(), mock_env(), mock_info_buyer, msg);
-        println!("Response: {:?}", &response);
-        match response {
-            Ok(_) => panic!("Expected error"),
-            Err(ContractError::Std(StdError::NotFound { .. })) => {}
-            Err(e) => panic!("Unexpected error: {}", e),
+            // now can query ongoing listings again
+            let query_msg = QueryMsg::ListingsByContractAddress {
+                contract_address: MOCK_CW2981_ADDR.to_string(),
+                start_after: Some("".to_string()),
+                limit: Some(10),
+            };
+            let query_res = from_binary::<ListingsResponse>(
+                &query(deps.as_ref(), mock_env(), query_msg).unwrap(),
+            )
+            .unwrap();
+
+            println!("Query Response: {:?}", &query_res);
+            assert_eq!(query_res.listings.len(), 4);
+        }
+
+        #[test]
+        fn cannot_buy_non_existent_listing() {
+            let mut deps = mock_deps();
+
+            let msg = ExecuteMsg::Buy {
+                contract_address: MOCK_CW2981_ADDR.to_string(),
+                token_id: "1".to_string(),
+            };
+
+            let mock_info_buyer = mock_info("buyer", &coins(100, "uaura"));
+            let response = execute(deps.as_mut(), mock_env(), mock_info_buyer, msg);
+            println!("Response: {:?}", &response);
+            match response {
+                Ok(_) => panic!("Expected error"),
+                Err(ContractError::Std(StdError::NotFound { .. })) => {}
+                Err(e) => panic!("Unexpected error: {}", e),
+            }
+        }
+
+        #[test]
+        fn cannot_buy_cancelled_listing() {
+            let mut deps = mock_deps();
+
+            create_listing(
+                deps.as_mut(),
+                "owner",
+                Addr::unchecked(MOCK_CW2981_ADDR),
+                "1",
+                None,
+                None,
+            )
+            .unwrap();
+
+            // cancel listing
+            let msg = ExecuteMsg::Cancel {
+                contract_address: MOCK_CW2981_ADDR.to_string(),
+                token_id: "1".to_string(),
+            };
+            let mock_info_owner = mock_info("owner", &coins(100, "uaura"));
+            execute(deps.as_mut(), mock_env(), mock_info_owner, msg).unwrap();
+
+            // try buy cancelled listing
+            let msg = ExecuteMsg::Buy {
+                contract_address: MOCK_CW2981_ADDR.to_string(),
+                token_id: "1".to_string(),
+            };
+
+            let mock_info_buyer = mock_info("buyer", &coins(100, "uaura"));
+            let response = execute(deps.as_mut(), mock_env(), mock_info_buyer, msg);
+            println!("Response: {:?}", &response);
+            assert!(response.is_err());
+        }
+
+        #[test]
+        fn cannot_buy_as_owner() {
+            let mut deps = mock_deps();
+
+            create_listing(
+                deps.as_mut(),
+                "owner",
+                Addr::unchecked(MOCK_CW2981_ADDR),
+                "1",
+                None,
+                None,
+            )
+            .unwrap();
+
+            // owner try to buy
+            let msg = ExecuteMsg::Buy {
+                contract_address: MOCK_CW2981_ADDR.to_string(),
+                token_id: "1".to_string(),
+            };
+            let mock_info_wrong_sender = mock_info("owner", &coins(100, "uaura"));
+
+            let response = execute(deps.as_mut(), mock_env(), mock_info_wrong_sender, msg);
+            match response {
+                Ok(_) => panic!("Expected error"),
+                Err(ContractError::CustomError { .. }) => {}
+                Err(e) => panic!("Unexpected error: {}", e),
+            }
+        }
+
+        #[test]
+        fn cannot_buy_without_enough_funds() {
+            let mut deps = mock_deps();
+
+            create_listing(
+                deps.as_mut(),
+                "owner",
+                Addr::unchecked(MOCK_CW2981_ADDR),
+                "1",
+                None,
+                None,
+            )
+            .unwrap();
+
+            // try buy with not enough funds
+            let msg = ExecuteMsg::Buy {
+                contract_address: MOCK_CW2981_ADDR.to_string(),
+                token_id: "1".to_string(),
+            };
+            let mock_info_buyer = mock_info("buyer", &coins(99, "uaura"));
+
+            let response = execute(deps.as_mut(), mock_env(), mock_info_buyer, msg);
+            println!("Response: {:?}", &response);
+            match response {
+                Ok(_) => panic!("Expected error"),
+                Err(ContractError::InsufficientFunds {}) => {}
+                Err(e) => panic!("Unexpected error: {}", e),
+            }
+        }
+
+        #[test]
+        fn buy_listing_with_royalty() {
+            let mut deps = mock_deps();
+
+            create_listing(
+                deps.as_mut(),
+                "owner",
+                Addr::unchecked(MOCK_CW2981_ADDR),
+                "1",
+                None,
+                None,
+            )
+            .unwrap();
+
+            // buyer try to buy
+            let msg = ExecuteMsg::Buy {
+                contract_address: MOCK_CW2981_ADDR.to_string(),
+                token_id: "1".to_string(),
+            };
+            let mock_info_buyer = mock_info("buyer", &coins(100, "uaura"));
+
+            let response = execute(deps.as_mut(), mock_env(), mock_info_buyer, msg).unwrap();
+            println!("Response: {:?}", &response);
+            assert_eq!(3, response.messages.len());
+            assert_eq!(
+                response.messages[0],
+                SubMsg::new(CosmosMsg::Wasm(WasmMsg::Execute {
+                    contract_addr: MOCK_CW2981_ADDR.to_string(),
+                    funds: vec![],
+                    msg: to_binary(&Cw2981ExecuteMsg::TransferNft {
+                        recipient: "buyer".to_string(),
+                        token_id: "1".to_string(),
+                    })
+                    .unwrap(),
+                })),
+                "should transfer nft to buyer"
+            );
+            assert_eq!(
+                response.messages[1],
+                SubMsg::new(CosmosMsg::Bank(BankMsg::Send {
+                    to_address: "creator".to_string(),
+                    amount: vec![cosmwasm_std::coin(10, "uaura")],
+                })),
+                "should transfer royalty to owner"
+            );
+            assert_eq!(
+                response.messages[2],
+                SubMsg::new(CosmosMsg::Bank(BankMsg::Send {
+                    to_address: "owner".to_string(),
+                    amount: vec![cosmwasm_std::coin(90, "uaura")],
+                })),
+                "should transfer the rest to owner"
+            );
+        }
+
+        #[test]
+        fn cannot_buy_listing_before_start_time() {
+            let mut deps = mock_deps();
+
+            create_listing(
+                deps.as_mut(),
+                "owner",
+                Addr::unchecked(MOCK_CW2981_ADDR),
+                "1",
+                Some(Cw721Expiration::AtTime(Timestamp::from_nanos(
+                    1_600_000_001,
+                ))),
+                None,
+            )
+            .unwrap();
+
+            // try buy before start time
+            let msg = ExecuteMsg::Buy {
+                contract_address: MOCK_CW2981_ADDR.to_string(),
+                token_id: "1".to_string(),
+            };
+            let mock_info_buyer = mock_info("buyer", &coins(100, "uaura"));
+
+            let mut env = mock_env();
+            env.block.time = Timestamp::from_nanos(1_600_000_000);
+            let response = execute(deps.as_mut(), env, mock_info_buyer, msg);
+            println!("Response: {:?}", &response);
+            match response {
+                Ok(_) => panic!("Expected error"),
+                Err(ContractError::CustomError { .. }) => {}
+                Err(e) => panic!("Unexpected error: {}", e),
+            }
+        }
+
+        #[test]
+        fn cannot_buy_listing_after_end_time() {
+            let mut deps = mock_deps();
+
+            create_listing(
+                deps.as_mut(),
+                "owner",
+                Addr::unchecked(MOCK_CW2981_ADDR),
+                "1",
+                None,
+                Some(Cw721Expiration::AtTime(Timestamp::from_nanos(
+                    1_600_000_000,
+                ))),
+            )
+            .unwrap();
+
+            // try buy after end time
+            let msg = ExecuteMsg::Buy {
+                contract_address: MOCK_CW2981_ADDR.to_string(),
+                token_id: "1".to_string(),
+            };
+            let mock_info_buyer = mock_info("buyer", &coins(100, "uaura"));
+
+            let mut env = mock_env();
+            env.block.time = Timestamp::from_nanos(1_600_000_001);
+            let response = execute(deps.as_mut(), env, mock_info_buyer, msg);
+            println!("Response: {:?}", &response);
+            match response {
+                Ok(_) => panic!("Expected error"),
+                Err(ContractError::CustomError { .. }) => {}
+                Err(e) => panic!("Unexpected error: {}", e),
+            }
+        }
+
+        #[test]
+        fn can_buy_listing_with_0_royalty() {
+            let mut deps = mock_deps();
+
+            create_listing(
+                deps.as_mut(),
+                "owner",
+                Addr::unchecked(MOCK_CW2981_ADDR),
+                "2",
+                None,
+                None,
+            )
+            .unwrap();
+
+            // buyer try to buy
+            let msg = ExecuteMsg::Buy {
+                contract_address: MOCK_CW2981_ADDR.to_string(),
+                token_id: "2".to_string(),
+            };
+            let mock_info_buyer = mock_info("buyer", &coins(100, "uaura"));
+
+            let response = execute(deps.as_mut(), mock_env(), mock_info_buyer, msg).unwrap();
+            assert_eq!(2, response.messages.len());
+            println!("Response: {:?}", &response);
+            assert_eq!(
+                response.messages[0],
+                SubMsg::new(CosmosMsg::Wasm(WasmMsg::Execute {
+                    contract_addr: MOCK_CW2981_ADDR.to_string(),
+                    funds: vec![],
+                    msg: to_binary(&Cw2981ExecuteMsg::TransferNft {
+                        recipient: "buyer".to_string(),
+                        token_id: "2".to_string(),
+                    })
+                    .unwrap(),
+                })),
+                "should transfer nft to buyer"
+            );
+            assert_eq!(
+                response.messages[1],
+                SubMsg::new(CosmosMsg::Bank(BankMsg::Send {
+                    to_address: "owner".to_string(),
+                    amount: vec![cosmwasm_std::coin(100, "uaura")],
+                })),
+                "should transfer all funds to owner"
+            );
+        }
+
+        #[test]
+        fn can_buy_listing_without_royalty() {
+            let mut deps = mock_deps();
+
+            create_listing(
+                deps.as_mut(),
+                "owner",
+                Addr::unchecked(MOCK_CW2981_ADDR),
+                "2",
+                None,
+                None,
+            )
+            .unwrap();
+
+            // buyer try to buy
+            let msg = ExecuteMsg::Buy {
+                contract_address: MOCK_CW2981_ADDR.to_string(),
+                token_id: "2".to_string(),
+            };
+            let mock_info_buyer = mock_info("buyer", &coins(100, "uaura"));
+
+            let response = execute(deps.as_mut(), mock_env(), mock_info_buyer, msg).unwrap();
+            assert_eq!(2, response.messages.len());
+            println!("Response: {:?}", &response);
+            assert_eq!(
+                response.messages[0],
+                SubMsg::new(CosmosMsg::Wasm(WasmMsg::Execute {
+                    contract_addr: MOCK_CW2981_ADDR.to_string(),
+                    funds: vec![],
+                    msg: to_binary(&Cw2981ExecuteMsg::TransferNft {
+                        recipient: "buyer".to_string(),
+                        token_id: "2".to_string(),
+                    })
+                    .unwrap(),
+                })),
+                "should transfer nft to buyer"
+            );
+            assert_eq!(
+                response.messages[1],
+                SubMsg::new(CosmosMsg::Bank(BankMsg::Send {
+                    to_address: "owner".to_string(),
+                    amount: vec![cosmwasm_std::coin(100, "uaura")],
+                })),
+                "should transfer all funds to owner"
+            );
+        }
+
+        #[test]
+        fn buy_when_owner_is_creator() {
+            let mut deps = mock_deps();
+
+            create_listing(
+                deps.as_mut(),
+                "owner",
+                Addr::unchecked(MOCK_CW2981_ADDR),
+                "3",
+                None,
+                None,
+            )
+            .unwrap();
+
+            // buyer try to buy
+            let msg = ExecuteMsg::Buy {
+                contract_address: MOCK_CW2981_ADDR.to_string(),
+                token_id: "3".to_string(),
+            };
+            let mock_info_buyer = mock_info("buyer", &coins(100, "uaura"));
+
+            let response = execute(deps.as_mut(), mock_env(), mock_info_buyer, msg).unwrap();
+            assert_eq!(2, response.messages.len());
+            println!("Response: {:?}", &response);
+            assert_eq!(
+                response.messages[0],
+                SubMsg::new(CosmosMsg::Wasm(WasmMsg::Execute {
+                    contract_addr: MOCK_CW2981_ADDR.to_string(),
+                    funds: vec![],
+                    msg: to_binary(&Cw2981ExecuteMsg::TransferNft {
+                        recipient: "buyer".to_string(),
+                        token_id: "3".to_string(),
+                    })
+                    .unwrap(),
+                })),
+                "should transfer nft to buyer"
+            );
+            assert_eq!(
+                response.messages[1],
+                SubMsg::new(CosmosMsg::Bank(BankMsg::Send {
+                    to_address: "owner".to_string(),
+                    amount: vec![cosmwasm_std::coin(100, "uaura")],
+                })),
+                "should transfer all funds to owner"
+            );
         }
     }
 
-    #[test]
-    fn cannot_buy_cancelled_listing() {
-        let mut deps = mock_deps();
+    // fn create_offer(
+    //     deps: DepsMut,
+    //     sender: &str,
+    //     contract_address: Addr,
+    //     token_id: Option<String>,
+    //     funds_amount: u128,
+    //     end_time: Cw20Expiration,
+    // ) -> Result<Response, ContractError> {
+    //     let msg = ExecuteMsg::OfferNft {
+    //         nft: NFT {
+    //             contract_address,
+    //             token_id,
+    //         },
+    //         funds_amount,
+    //         end_time,
+    //     };
+    //     let info = mock_info(sender, &coins(1000, "uaura"));
+    //     execute(deps, mock_env(), info, msg)
+    // }
 
-        create_listing(
-            deps.as_mut(),
-            "owner",
-            Addr::unchecked(MOCK_CW2981_ADDR),
-            "1",
-            None,
-            None,
-        )
-        .unwrap();
+    // fn accept_offer(
+    //     deps: DepsMut,
+    //     sender: &str,
+    //     offerer: &str,
+    //     contract_address: Addr,
+    //     token_id: Option<String>,
+    // ) -> Result<Response, ContractError> {
+    //     let msg = ExecuteMsg::AcceptNftOffer {
+    //         offerer: offerer.to_string(),
+    //         nft: NFT {
+    //             contract_address,
+    //             token_id,
+    //         },
+    //     };
+    //     let info = mock_info(sender, &coins(1000, "uaura"));
+    //     execute(deps, mock_env(), info, msg)
+    // }
 
-        // cancel listing
-        let msg = ExecuteMsg::Cancel {
-            contract_address: MOCK_CW2981_ADDR.to_string(),
-            token_id: "1".to_string(),
-        };
-        let mock_info_owner = mock_info("owner", &coins(100, "uaura"));
-        execute(deps.as_mut(), mock_env(), mock_info_owner, msg).unwrap();
+    mod offer_nft {
+        // use super::*;
 
-        // try buy cancelled listing
-        let msg = ExecuteMsg::Buy {
-            contract_address: MOCK_CW2981_ADDR.to_string(),
-            token_id: "1".to_string(),
-        };
+        // // test offer a specific nft
+        // #[test]
+        // fn test_offer_nft() {
+        //     // prepare deps for test
+        //     let mut deps = mock_deps();
 
-        let mock_info_buyer = mock_info("buyer", &coins(100, "uaura"));
-        let response = execute(deps.as_mut(), mock_env(), mock_info_buyer, msg);
-        println!("Response: {:?}", &response);
-        assert!(response.is_err());
+        //     // get block time from mock env
+        //     let block_time = mock_env().block.time;
+
+        //     let response = create_offer(
+        //         deps.as_mut(),
+        //         MOCK_OFFER_NFT_OFFERER_1,
+        //         Addr::unchecked(MOCK_CW2981_ADDR),
+        //         Some(MOCK_OFFER_NFT_TOKEN_ID_1.to_string()),
+        //         10000000,
+        //         Cw20Expiration::AtTime(block_time.plus_seconds(1000)),
+        //     );
+        //     println!("Response: {:?}", &response);
+        //     assert!(response.is_ok());
+        // }
+
+        // // test user can accept offer
+        // #[test]
+        // fn user_can_not_offer_invalid_nft() {
+        //     // prepare deps for test
+        //     let mut deps = mock_deps();
+
+        //     // get block time from mock env
+        //     let block_time = mock_env().block.time;
+
+        //     let response = create_offer(
+        //         deps.as_mut(),
+        //         MOCK_OFFER_NFT_OFFERER_1,
+        //         Addr::unchecked(MOCK_CW2981_ADDR),
+        //         Some(MOCK_OFFER_NFT_TOKEN_ID_INVALID.to_string()),
+        //         10000000,
+        //         Cw20Expiration::AtTime(block_time.plus_seconds(1000)),
+        //     );
+        //     assert_eq!(
+        //         response.err().unwrap().to_string(),
+        //         ContractError::CustomError {
+        //             val: "Nft not exist".to_string()
+        //         }
+        //         .to_string()
+        //     );
+        // }
+
+        // // cannot offer the owned nft
+        // #[test]
+        // fn cannot_offer_owned_nft() {
+        //     // prepare deps for test
+        //     let mut deps = mock_deps();
+
+        //     // get block time from mock env
+        //     let block_time = mock_env().block.time;
+
+        //     let response = create_offer(
+        //         deps.as_mut(),
+        //         MOCK_OFFER_NFT_OWNER,
+        //         Addr::unchecked(MOCK_CW2981_ADDR),
+        //         Some(MOCK_OFFER_NFT_TOKEN_ID_1.to_string()),
+        //         10000000,
+        //         Cw20Expiration::AtTime(block_time.plus_seconds(1000)),
+        //     );
+        //     assert_eq!(
+        //         response.err().unwrap().to_string(),
+        //         ContractError::CustomError {
+        //             val: "Cannot offer owned nft".to_string()
+        //         }
+        //         .to_string()
+        //     );
+        // }
+
+        // // cannot offer without token id
+        // #[test]
+        // fn cannot_offer_without_token_id() {
+        //     // prepare deps for test
+        //     let mut deps = mock_deps();
+
+        //     // get block time from mock env
+        //     let block_time = mock_env().block.time;
+
+        //     let response = create_offer(
+        //         deps.as_mut(),
+        //         MOCK_OFFER_NFT_OFFERER_1,
+        //         Addr::unchecked(MOCK_CW2981_ADDR),
+        //         None,
+        //         10000000,
+        //         Cw20Expiration::AtTime(block_time.plus_seconds(1000)),
+        //     );
+        //     assert_eq!(
+        //         response.err().unwrap().to_string(),
+        //         ContractError::CustomError {
+        //             val: "Collection offer is not supported".to_string()
+        //         }
+        //         .to_string()
+        //     );
+        // }
+
+        // // cannot offer with insufficient allowance funds
+        // #[test]
+        // fn cannot_offer_with_insufficient_allowance_funds() {
+        //     // prepare deps for test
+        //     let mut deps = mock_deps();
+
+        //     // get block time from mock env
+        //     let block_time = mock_env().block.time;
+
+        //     let response = create_offer(
+        //         deps.as_mut(),
+        //         MOCK_OFFER_NFT_OFFERER_INSUFFICIENT_ALLOWANCE,
+        //         Addr::unchecked(MOCK_CW2981_ADDR),
+        //         Some(MOCK_OFFER_NFT_TOKEN_ID_1.to_string()),
+        //         10000000,
+        //         Cw20Expiration::AtTime(block_time.plus_seconds(1000)),
+        //     );
+        //     assert_eq!(
+        //         response.err().unwrap().to_string(),
+        //         ContractError::InsufficientAllowance {}.to_string()
+        //     );
+        // }
+
+        // // cannot offer with insufficient balance funds
+        // #[test]
+        // fn cannot_offer_with_insufficient_balance_funds() {
+        //     // prepare deps for test
+        //     let mut deps = mock_deps();
+
+        //     // get block time from mock env
+        //     let block_time = mock_env().block.time;
+
+        //     let response = create_offer(
+        //         deps.as_mut(),
+        //         MOCK_OFFER_NFT_OFFERER_INSUFFICIENT_BALANCE,
+        //         Addr::unchecked(MOCK_CW2981_ADDR),
+        //         Some(MOCK_OFFER_NFT_TOKEN_ID_1.to_string()),
+        //         10000000,
+        //         Cw20Expiration::AtTime(block_time.plus_seconds(1000)),
+        //     );
+        //     assert_eq!(
+        //         response.err().unwrap().to_string(),
+        //         ContractError::InsufficientBalance {}.to_string()
+        //     );
+        // }
+
+        // // cannot offer with invalid expiration
+        // #[test]
+        // fn cannot_offer_with_invalid_expiration() {
+        //     // prepare deps for test
+        //     let mut deps = mock_deps();
+
+        //     // get block time from mock env
+        //     let block_time = mock_env().block.time;
+
+        //     let response = create_offer(
+        //         deps.as_mut(),
+        //         MOCK_OFFER_NFT_OFFERER_1,
+        //         Addr::unchecked(MOCK_CW2981_ADDR),
+        //         Some(MOCK_OFFER_NFT_TOKEN_ID_1.to_string()),
+        //         10000000,
+        //         Cw20Expiration::AtTime(block_time.minus_seconds(1_000)),
+        //     );
+
+        //     assert_eq!(
+        //         response.err().unwrap().to_string(),
+        //         ContractError::InvalidEndTime {}.to_string()
+        //     );
+        // }
     }
 
-    #[test]
-    fn cannot_buy_as_owner() {
-        let mut deps = mock_deps();
+    mod convert_and_revert_native {
 
-        create_listing(
-            deps.as_mut(),
-            "owner",
-            Addr::unchecked(MOCK_CW2981_ADDR),
-            "1",
-            None,
-            None,
-        )
-        .unwrap();
+        use super::*;
 
-        // owner try to buy
-        let msg = ExecuteMsg::Buy {
-            contract_address: MOCK_CW2981_ADDR.to_string(),
-            token_id: "1".to_string(),
-        };
-        let mock_info_wrong_sender = mock_info("owner", &coins(100, "uaura"));
+        // user cannot convert native token to twilight token because not provided valid denom
+        #[test]
+        fn user_cannot_convert_native_because_not_valid_denom() {
+            // get integration test app and contracts
+            let (mut app, contracts) = instantiate_contracts();
+            let cw20_address = contracts[2].contract_addr.clone();
 
-        let response = execute(deps.as_mut(), mock_env(), mock_info_wrong_sender, msg);
-        match response {
-            Ok(_) => panic!("Expected error"),
-            Err(ContractError::CustomError { .. }) => {}
-            Err(e) => panic!("Unexpected error: {}", e),
+            // Mint 1000000000 native token to USER_1
+            app.sudo(cw_multi_test::SudoMsg::Bank(
+                cw_multi_test::BankSudo::Mint {
+                    to_address: USER_1.to_string(),
+                    amount: vec![Coin {
+                        amount: Uint128::from(1000000000u128),
+                        denom: NATIVE_DENOM_2.to_string(),
+                    }],
+                },
+            ))
+            .unwrap();
+
+            // query balance of USER_1 in twilight token
+            let balance: BalanceResponse = app
+                .wrap()
+                .query_wasm_smart(
+                    cw20_address.clone(),
+                    &cw20::Cw20QueryMsg::Balance {
+                        address: USER_1.to_string(),
+                    },
+                )
+                .unwrap();
+            assert_eq!(balance.balance, Uint128::zero());
+
+            // execute mint function to convert native token to twilight token
+            let response = app.execute_contract(
+                Addr::unchecked(USER_1.to_string()),
+                Addr::unchecked(cw20_address.clone()),
+                &cw20::Cw20ExecuteMsg::Mint {
+                    recipient: USER_1.to_string(),
+                    amount: Uint128::from(100000000u128),
+                },
+                &[Coin {
+                    amount: Uint128::from(100000000u128),
+                    denom: NATIVE_DENOM_2.to_string(),
+                }],
+            );
+            assert_eq!(
+                response.err().unwrap().source().unwrap().to_string(),
+                ContractError::Unauthorized {}.to_string()
+            );
+
+            // query balance of USER_1 in twilight token
+            let balance: BalanceResponse = app
+                .wrap()
+                .query_wasm_smart(
+                    cw20_address,
+                    &cw20::Cw20QueryMsg::Balance {
+                        address: USER_1.to_string(),
+                    },
+                )
+                .unwrap();
+            assert_eq!(balance.balance, Uint128::zero());
+        }
+
+        // user can convert native token to twilight token by execute minting
+        #[test]
+        fn user_can_convert_native_token_success() {
+            // get integration test app and contracts
+            let (mut app, contracts) = instantiate_contracts();
+            let cw20_address = contracts[2].contract_addr.clone();
+
+            // Mint 1000000000 native token to USER_1
+            app.sudo(cw_multi_test::SudoMsg::Bank(
+                cw_multi_test::BankSudo::Mint {
+                    to_address: USER_1.to_string(),
+                    amount: vec![Coin {
+                        amount: Uint128::from(1000000000u128),
+                        denom: NATIVE_DENOM.to_string(),
+                    }],
+                },
+            ))
+            .unwrap();
+
+            // query balance of USER_1 in twilight token
+            let balance: BalanceResponse = app
+                .wrap()
+                .query_wasm_smart(
+                    cw20_address.clone(),
+                    &cw20::Cw20QueryMsg::Balance {
+                        address: USER_1.to_string(),
+                    },
+                )
+                .unwrap();
+            assert_eq!(balance.balance, Uint128::zero());
+
+            // query balance of native token in twilight token contract
+            let req: QueryRequest<BankQuery> = QueryRequest::Bank(BankQuery::Balance {
+                address: cw20_address.to_string(),
+                denom: NATIVE_DENOM.to_string(),
+            });
+            let res = app.raw_query(&to_binary(&req).unwrap()).unwrap().unwrap();
+            let balance: BankBalanceResponse = from_binary(&res).unwrap();
+            assert_eq!(balance.amount.amount, Uint128::zero());
+
+            // execute mint function to convert native token to twilight token
+            let response = app.execute_contract(
+                Addr::unchecked(USER_1.to_string()),
+                Addr::unchecked(cw20_address.clone()),
+                &cw20::Cw20ExecuteMsg::Mint {
+                    recipient: USER_1.to_string(),
+                    amount: Uint128::from(100000000u128),
+                },
+                &[Coin {
+                    amount: Uint128::from(100000000u128),
+                    denom: NATIVE_DENOM.to_string(),
+                }],
+            );
+            assert!(response.is_ok());
+
+            // query balance of USER_1 in twilight token
+            let balance: BalanceResponse = app
+                .wrap()
+                .query_wasm_smart(
+                    cw20_address.clone(),
+                    &cw20::Cw20QueryMsg::Balance {
+                        address: USER_1.to_string(),
+                    },
+                )
+                .unwrap();
+            assert_eq!(balance.balance, Uint128::from(100000000u128));
+
+            // query balance of native token in twilight token contract
+            let req: QueryRequest<BankQuery> = QueryRequest::Bank(BankQuery::Balance {
+                address: cw20_address,
+                denom: NATIVE_DENOM.to_string(),
+            });
+            let res = app.raw_query(&to_binary(&req).unwrap()).unwrap().unwrap();
+            let balance: BankBalanceResponse = from_binary(&res).unwrap();
+            assert_eq!(balance.amount.amount, Uint128::from(100000000u128));
+        }
+
+        // user can revert native token from twilight token by execute burning
+        #[test]
+        fn user_can_revert_native_token_success() {
+            // get integration test app and contracts
+            let (mut app, contracts) = instantiate_contracts();
+            let cw20_address = contracts[2].contract_addr.clone();
+
+            // Mint 1000000000 native token to USER_1
+            app.sudo(cw_multi_test::SudoMsg::Bank(
+                cw_multi_test::BankSudo::Mint {
+                    to_address: USER_1.to_string(),
+                    amount: vec![Coin {
+                        amount: Uint128::from(1000000000u128),
+                        denom: NATIVE_DENOM.to_string(),
+                    }],
+                },
+            ))
+            .unwrap();
+
+            // execute mint function to convert native token to twilight token
+            let response = app.execute_contract(
+                Addr::unchecked(USER_1.to_string()),
+                Addr::unchecked(cw20_address.clone()),
+                &cw20::Cw20ExecuteMsg::Mint {
+                    recipient: USER_1.to_string(),
+                    amount: Uint128::from(100000000u128),
+                },
+                &[Coin {
+                    amount: Uint128::from(100000000u128),
+                    denom: NATIVE_DENOM.to_string(),
+                }],
+            );
+            assert!(response.is_ok());
+
+            // query balance of USER_1 in twilight token
+            let balance: BalanceResponse = app
+                .wrap()
+                .query_wasm_smart(
+                    cw20_address.clone(),
+                    &cw20::Cw20QueryMsg::Balance {
+                        address: USER_1.to_string(),
+                    },
+                )
+                .unwrap();
+            assert_eq!(balance.balance, Uint128::from(100000000u128));
+
+            // execute burn function to revert native token from twilight token
+            let response = app.execute_contract(
+                Addr::unchecked(USER_1.to_string()),
+                Addr::unchecked(cw20_address.clone()),
+                &cw20::Cw20ExecuteMsg::Burn {
+                    amount: Uint128::from(50000000u128),
+                },
+                &[],
+            );
+            assert!(response.is_ok());
+
+            // query balance of USER_1 in twilight token
+            let balance: BalanceResponse = app
+                .wrap()
+                .query_wasm_smart(
+                    cw20_address,
+                    &cw20::Cw20QueryMsg::Balance {
+                        address: USER_1.to_string(),
+                    },
+                )
+                .unwrap();
+            assert_eq!(balance.balance, Uint128::from(50000000u128));
         }
     }
 
-    #[test]
-    fn cannot_buy_without_enough_funds() {
-        let mut deps = mock_deps();
+    mod accept_offer {
+        use crate::integration_tests::env::NATIVE_DENOM;
 
-        create_listing(
-            deps.as_mut(),
-            "owner",
-            Addr::unchecked(MOCK_CW2981_ADDR),
-            "1",
-            None,
-            None,
-        )
-        .unwrap();
+        use super::*;
+        use cw20::{BalanceResponse, Cw20QueryMsg};
+        use cw2981_royalties::{Metadata, MintMsg};
+        use cw721_base::msg::ExecuteMsg as Cw721ExecuteMsg;
+        use cw_multi_test::Executor;
 
-        // try buy with not enough funds
-        let msg = ExecuteMsg::Buy {
-            contract_address: MOCK_CW2981_ADDR.to_string(),
-            token_id: "1".to_string(),
-        };
-        let mock_info_buyer = mock_info("buyer", &coins(99, "uaura"));
+        // owner can accept offer
+        #[test]
+        fn owner_can_accept_offer_new() {
+            // get integration test app and contracts
+            let (mut app, contracts) = instantiate_contracts();
+            let cw2981_address = contracts[0].contract_addr.clone();
+            let marketplace_address = contracts[1].contract_addr.clone();
+            let cw20_address = contracts[2].contract_addr.clone();
 
-        let response = execute(deps.as_mut(), mock_env(), mock_info_buyer, msg);
-        println!("Response: {:?}", &response);
-        match response {
-            Ok(_) => panic!("Expected error"),
-            Err(ContractError::InsufficientFunds {}) => {}
-            Err(e) => panic!("Unexpected error: {}", e),
+            // prepare mint cw2981 message to ADMIN
+            let mint_msg: Cw721ExecuteMsg<Metadata, Metadata> = Cw721ExecuteMsg::Mint(MintMsg {
+                token_id: MOCK_OFFER_NFT_TOKEN_ID_1.to_string(),
+                owner: ADMIN.to_string(),
+                token_uri: Some(
+                    "https://ipfs.io/ipfs/Qme7ss3ARVgxv6rXqVPiikMJ8u2NLgmgszg13pYrDKEoiu"
+                        .to_string(),
+                ),
+                extension: Metadata {
+                    image: None,
+                    image_data: None,
+                    external_url: None,
+                    description: None,
+                    name: None,
+                    attributes: None,
+                    background_color: None,
+                    animation_url: None,
+                    youtube_url: None,
+                    royalty_percentage: None,
+                    royalty_payment_address: None,
+                },
+            });
+
+            // mint cw2981 token to ADMIN
+            let res = app.execute_contract(
+                Addr::unchecked(ADMIN),
+                Addr::unchecked(cw2981_address.clone()),
+                &mint_msg,
+                &[],
+            );
+            assert!(res.is_ok());
+
+            // Mint 1000000000 native token to USER_1
+            app.sudo(cw_multi_test::SudoMsg::Bank(
+                cw_multi_test::BankSudo::Mint {
+                    to_address: USER_1.to_string(),
+                    amount: vec![Coin {
+                        amount: Uint128::from(1000000000u128),
+                        denom: NATIVE_DENOM.to_string(),
+                    }],
+                },
+            ))
+            .unwrap();
+
+            // execute mint function to convert native token to twilight token
+            let response = app.execute_contract(
+                Addr::unchecked(USER_1.to_string()),
+                Addr::unchecked(cw20_address.clone()),
+                &cw20::Cw20ExecuteMsg::Mint {
+                    recipient: USER_1.to_string(),
+                    amount: Uint128::from(100000000u128),
+                },
+                &[Coin {
+                    amount: Uint128::from(100000000u128),
+                    denom: NATIVE_DENOM.to_string(),
+                }],
+            );
+            assert!(response.is_ok());
+
+            // offerer creates offer
+            // prepare offer nft message
+            let offer_nft_msg = ExecuteMsg::OfferNft {
+                nft: NFT {
+                    contract_address: Addr::unchecked(cw2981_address.clone()),
+                    token_id: Some(MOCK_OFFER_NFT_TOKEN_ID_1.to_string()),
+                },
+                funds_amount: MOCK_OFFER_CW20_PRICE,
+                end_time: Cw721Expiration::AtTime(app.block_info().time.plus_seconds(1000)),
+            };
+
+            // offerer (USER_1) creates offer
+            let res = app.execute_contract(
+                Addr::unchecked(USER_1.to_string()),
+                Addr::unchecked(marketplace_address.clone()),
+                &offer_nft_msg,
+                &[],
+            );
+            assert!(res.is_ok());
+
+            // check the owner of the token
+            let res: cw721::OwnerOfResponse = app
+                .wrap()
+                .query_wasm_smart(
+                    Addr::unchecked(cw2981_address.clone()),
+                    &Cw721QueryMsg::OwnerOf {
+                        token_id: MOCK_OFFER_NFT_TOKEN_ID_1.to_string(),
+                        include_expired: None,
+                    },
+                )
+                .unwrap();
+            // it should be ADMIN
+            assert_eq!(res.owner, ADMIN.to_string());
+
+            // *******************
+            // OWNER ACCEPTS OFFER
+            // *******************
+            // ADMIN must approve marketplace to transfer nft token
+            // prepare approve message
+            let approve_msg: Cw721ExecuteMsg<Metadata, Metadata> = Cw721ExecuteMsg::Approve {
+                spender: marketplace_address.clone(),
+                token_id: MOCK_OFFER_NFT_TOKEN_ID_1.to_string(),
+                expires: None,
+            };
+
+            // ADMIN approves marketplace to transfer nft token
+            let res = app.execute_contract(
+                Addr::unchecked(ADMIN),
+                Addr::unchecked(cw2981_address.clone()),
+                &approve_msg,
+                &[],
+            );
+            assert!(res.is_ok());
+
+            // prepare accept offer message
+            let accept_offer_msg = ExecuteMsg::AcceptNftOffer {
+                offerer: USER_1.to_string(),
+                nft: NFT {
+                    contract_address: Addr::unchecked(cw2981_address.clone()),
+                    token_id: Some(MOCK_OFFER_NFT_TOKEN_ID_1.to_string()),
+                },
+                funds_amount: MOCK_OFFER_CW20_PRICE,
+            };
+
+            // owner (ADMIN) accepts offer
+            let res = app.execute_contract(
+                Addr::unchecked(ADMIN),
+                Addr::unchecked(marketplace_address),
+                &accept_offer_msg,
+                &[],
+            );
+            assert!(res.is_ok());
+
+            // check the owner of the token
+            let res: cw721::OwnerOfResponse = app
+                .wrap()
+                .query_wasm_smart(
+                    Addr::unchecked(cw2981_address.clone()),
+                    &Cw721QueryMsg::OwnerOf {
+                        token_id: MOCK_OFFER_NFT_TOKEN_ID_1.to_string(),
+                        include_expired: None,
+                    },
+                )
+                .unwrap();
+            assert_eq!(res.owner, USER_1.to_string());
+
+            // query the RoyaltyInfo of the token
+            let _res: RoyaltiesInfoResponse = app
+                .wrap()
+                .query_wasm_smart(
+                    Addr::unchecked(cw2981_address),
+                    &Cw721QueryMsg::Extension {
+                        msg: Cw2981QueryMsg::RoyaltyInfo {
+                            token_id: MOCK_OFFER_NFT_TOKEN_ID_1.to_string(),
+                            sale_price: MOCK_OFFER_CW20_PRICE.into(),
+                        },
+                    },
+                )
+                .unwrap();
+
+            // check the balance cw20 of the offerer
+            let res: BalanceResponse = app
+                .wrap()
+                .query_wasm_smart(
+                    Addr::unchecked(cw20_address),
+                    &Cw20QueryMsg::Balance {
+                        address: ADMIN.to_string(),
+                    },
+                )
+                .unwrap();
+
+            assert_eq!(res.balance, Uint128::from(MOCK_OFFER_CW20_PRICE));
         }
-    }
-
-    #[test]
-    fn buy_listing_with_royalty() {
-        let mut deps = mock_deps();
-
-        create_listing(
-            deps.as_mut(),
-            "owner",
-            Addr::unchecked(MOCK_CW2981_ADDR),
-            "1",
-            None,
-            None,
-        )
-        .unwrap();
-
-        // buyer try to buy
-        let msg = ExecuteMsg::Buy {
-            contract_address: MOCK_CW2981_ADDR.to_string(),
-            token_id: "1".to_string(),
-        };
-        let mock_info_buyer = mock_info("buyer", &coins(100, "uaura"));
-
-        let response = execute(deps.as_mut(), mock_env(), mock_info_buyer, msg).unwrap();
-        println!("Response: {:?}", &response);
-        assert_eq!(3, response.messages.len());
-        assert_eq!(
-            response.messages[0],
-            SubMsg::new(CosmosMsg::Wasm(WasmMsg::Execute {
-                contract_addr: MOCK_CW2981_ADDR.to_string(),
-                funds: vec![],
-                msg: to_binary(&Cw2981ExecuteMsg::TransferNft {
-                    recipient: "buyer".to_string(),
-                    token_id: "1".to_string(),
-                })
-                .unwrap(),
-            })),
-            "should transfer nft to buyer"
-        );
-        assert_eq!(
-            response.messages[1],
-            SubMsg::new(CosmosMsg::Bank(BankMsg::Send {
-                to_address: "creator".to_string(),
-                amount: vec![cosmwasm_std::coin(10, "uaura")],
-            })),
-            "should transfer royalty to owner"
-        );
-        assert_eq!(
-            response.messages[2],
-            SubMsg::new(CosmosMsg::Bank(BankMsg::Send {
-                to_address: "owner".to_string(),
-                amount: vec![cosmwasm_std::coin(90, "uaura")],
-            })),
-            "should transfer the rest to owner"
-        );
-    }
-
-    #[test]
-    fn cannot_buy_listing_before_start_time() {
-        let mut deps = mock_deps();
-
-        create_listing(
-            deps.as_mut(),
-            "owner",
-            Addr::unchecked(MOCK_CW2981_ADDR),
-            "1",
-            Some(Expiration::AtTime(Timestamp::from_nanos(1_600_000_001))),
-            None,
-        )
-        .unwrap();
-
-        // try buy before start time
-        let msg = ExecuteMsg::Buy {
-            contract_address: MOCK_CW2981_ADDR.to_string(),
-            token_id: "1".to_string(),
-        };
-        let mock_info_buyer = mock_info("buyer", &coins(100, "uaura"));
-
-        let mut env = mock_env();
-        env.block.time = Timestamp::from_nanos(1_600_000_000);
-        let response = execute(deps.as_mut(), env, mock_info_buyer, msg);
-        println!("Response: {:?}", &response);
-        match response {
-            Ok(_) => panic!("Expected error"),
-            Err(ContractError::CustomError { .. }) => {}
-            Err(e) => panic!("Unexpected error: {}", e),
-        }
-    }
-
-    #[test]
-    fn cannot_buy_listing_after_end_time() {
-        let mut deps = mock_deps();
-
-        create_listing(
-            deps.as_mut(),
-            "owner",
-            Addr::unchecked(MOCK_CW2981_ADDR),
-            "1",
-            None,
-            Some(Expiration::AtTime(Timestamp::from_nanos(1_600_000_000))),
-        )
-        .unwrap();
-
-        // try buy after end time
-        let msg = ExecuteMsg::Buy {
-            contract_address: MOCK_CW2981_ADDR.to_string(),
-            token_id: "1".to_string(),
-        };
-        let mock_info_buyer = mock_info("buyer", &coins(100, "uaura"));
-
-        let mut env = mock_env();
-        env.block.time = Timestamp::from_nanos(1_600_000_001);
-        let response = execute(deps.as_mut(), env, mock_info_buyer, msg);
-        println!("Response: {:?}", &response);
-        match response {
-            Ok(_) => panic!("Expected error"),
-            Err(ContractError::CustomError { .. }) => {}
-            Err(e) => panic!("Unexpected error: {}", e),
-        }
-    }
-
-    #[test]
-    fn can_buy_listing_with_0_royalty() {
-        let mut deps = mock_deps();
-
-        create_listing(
-            deps.as_mut(),
-            "owner",
-            Addr::unchecked(MOCK_CW2981_ADDR),
-            "2",
-            None,
-            None,
-        )
-        .unwrap();
-
-        // buyer try to buy
-        let msg = ExecuteMsg::Buy {
-            contract_address: MOCK_CW2981_ADDR.to_string(),
-            token_id: "2".to_string(),
-        };
-        let mock_info_buyer = mock_info("buyer", &coins(100, "uaura"));
-
-        let response = execute(deps.as_mut(), mock_env(), mock_info_buyer, msg).unwrap();
-        assert_eq!(2, response.messages.len());
-        println!("Response: {:?}", &response);
-        assert_eq!(
-            response.messages[0],
-            SubMsg::new(CosmosMsg::Wasm(WasmMsg::Execute {
-                contract_addr: MOCK_CW2981_ADDR.to_string(),
-                funds: vec![],
-                msg: to_binary(&Cw2981ExecuteMsg::TransferNft {
-                    recipient: "buyer".to_string(),
-                    token_id: "2".to_string(),
-                })
-                .unwrap(),
-            })),
-            "should transfer nft to buyer"
-        );
-        assert_eq!(
-            response.messages[1],
-            SubMsg::new(CosmosMsg::Bank(BankMsg::Send {
-                to_address: "owner".to_string(),
-                amount: vec![cosmwasm_std::coin(100, "uaura")],
-            })),
-            "should transfer all funds to owner"
-        );
-    }
-
-    #[test]
-    fn can_buy_listing_without_royalty() {
-        let mut deps = mock_deps();
-
-        create_listing(
-            deps.as_mut(),
-            "owner",
-            Addr::unchecked(MOCK_CW2981_ADDR),
-            "2",
-            None,
-            None,
-        )
-        .unwrap();
-
-        // buyer try to buy
-        let msg = ExecuteMsg::Buy {
-            contract_address: MOCK_CW2981_ADDR.to_string(),
-            token_id: "2".to_string(),
-        };
-        let mock_info_buyer = mock_info("buyer", &coins(100, "uaura"));
-
-        let response = execute(deps.as_mut(), mock_env(), mock_info_buyer, msg).unwrap();
-        assert_eq!(2, response.messages.len());
-        println!("Response: {:?}", &response);
-        assert_eq!(
-            response.messages[0],
-            SubMsg::new(CosmosMsg::Wasm(WasmMsg::Execute {
-                contract_addr: MOCK_CW2981_ADDR.to_string(),
-                funds: vec![],
-                msg: to_binary(&Cw2981ExecuteMsg::TransferNft {
-                    recipient: "buyer".to_string(),
-                    token_id: "2".to_string(),
-                })
-                .unwrap(),
-            })),
-            "should transfer nft to buyer"
-        );
-        assert_eq!(
-            response.messages[1],
-            SubMsg::new(CosmosMsg::Bank(BankMsg::Send {
-                to_address: "owner".to_string(),
-                amount: vec![cosmwasm_std::coin(100, "uaura")],
-            })),
-            "should transfer all funds to owner"
-        );
-    }
-
-    #[test]
-    fn buy_when_owner_is_creator() {
-        let mut deps = mock_deps();
-
-        create_listing(
-            deps.as_mut(),
-            "owner",
-            Addr::unchecked(MOCK_CW2981_ADDR),
-            "3",
-            None,
-            None,
-        )
-        .unwrap();
-
-        // buyer try to buy
-        let msg = ExecuteMsg::Buy {
-            contract_address: MOCK_CW2981_ADDR.to_string(),
-            token_id: "3".to_string(),
-        };
-        let mock_info_buyer = mock_info("buyer", &coins(100, "uaura"));
-
-        let response = execute(deps.as_mut(), mock_env(), mock_info_buyer, msg).unwrap();
-        assert_eq!(2, response.messages.len());
-        println!("Response: {:?}", &response);
-        assert_eq!(
-            response.messages[0],
-            SubMsg::new(CosmosMsg::Wasm(WasmMsg::Execute {
-                contract_addr: MOCK_CW2981_ADDR.to_string(),
-                funds: vec![],
-                msg: to_binary(&Cw2981ExecuteMsg::TransferNft {
-                    recipient: "buyer".to_string(),
-                    token_id: "3".to_string(),
-                })
-                .unwrap(),
-            })),
-            "should transfer nft to buyer"
-        );
-        assert_eq!(
-            response.messages[1],
-            SubMsg::new(CosmosMsg::Bank(BankMsg::Send {
-                to_address: "owner".to_string(),
-                amount: vec![cosmwasm_std::coin(100, "uaura")],
-            })),
-            "should transfer all funds to owner"
-        );
     }
 }

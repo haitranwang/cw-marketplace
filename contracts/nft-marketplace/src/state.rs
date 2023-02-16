@@ -3,6 +3,8 @@ use cosmwasm_std::{Addr, BlockInfo, Coin};
 use cw721::Expiration;
 use cw_storage_plus::{Index, IndexList, IndexedMap, Item, MultiIndex, UniqueIndex};
 
+use crate::order_state::{orders, OfferIndexes, OrderComponents, OrderKey};
+
 #[cw_serde]
 pub enum AuctionConfig {
     FixedPrice {
@@ -101,6 +103,13 @@ pub fn listings<'a>() -> IndexedMap<'a, ListingKey, Listing, ListingIndexes<'a>>
 #[cw_serde]
 pub struct Config {
     pub owner: Addr,
+    pub vaura_address: Addr,
+}
+
+// we use this struct in the migration
+#[cw_serde]
+pub struct ConfigOld {
+    pub owner: Addr,
 }
 
 // Auction Contract
@@ -146,6 +155,8 @@ pub struct MarketplaceContract<'a> {
     pub listings: IndexedMap<'a, ListingKey, Listing, ListingIndexes<'a>>,
     pub auction_contracts:
         IndexedMap<'a, AuctionContractKey, AuctionContract, AuctionContractIndexes<'a>>,
+
+    pub offers: IndexedMap<'a, OrderKey, OrderComponents, OfferIndexes<'a>>,
 }
 
 // impl default for MarketplaceContract
@@ -155,6 +166,8 @@ impl Default for MarketplaceContract<'static> {
             config: Item::<Config>::new("config"),
             listings: listings(),
             auction_contracts: auction_contracts(),
+
+            offers: orders(),
         }
     }
 }
